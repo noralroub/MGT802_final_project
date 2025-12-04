@@ -8,6 +8,7 @@ CHARS_PER_TOKEN = 4  # rough estimate for token counting
 # Section headers to detect (case-insensitive)
 SECTION_HEADERS = [
     "abstract",
+    "background",
     "introduction",
     "methods",
     "results",

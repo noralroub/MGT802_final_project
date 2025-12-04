@@ -54,8 +54,9 @@ def detect_sections(text: str) -> Dict[str, int]:
 
     for section in SECTION_HEADERS:
         # Case-insensitive search for section headers
-        pattern = rf"(?:^|\n)\s*{re.escape(section)}\s*(?:\n|$)"
-        match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+        # Match header with optional whitespace, but don't require line boundaries
+        pattern = rf"\b{re.escape(section)}\b"
+        match = re.search(pattern, text, re.IGNORECASE)
 
         if match:
             sections[section.lower()] = match.start()

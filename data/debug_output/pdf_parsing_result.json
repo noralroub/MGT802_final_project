@@ -7,10 +7,12 @@
     "avg_tokens_per_chunk": 772.6
   },
   "sections": {
-    "abstract": 520,
-    "methods": 1683,
-    "results": 34936,
-    "conclusions": 9878,
+    "abstract": 8,
+    "background": 511,
+    "methods": 980,
+    "results": 702,
+    "discussion": 16672,
+    "conclusions": 28142,
     "references": 8920
   },
   "sample_chunks": [
