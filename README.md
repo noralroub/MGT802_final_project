@@ -103,3 +103,8 @@ ___________________________________________________
    - render fixed layout boxes using visual layout JSON
    - optional: show raw JSON for debugging
 
+## Quick Setup
+- Create a `.env` file with `OPENAI_API_KEY=your_key_here`.
+- Install dependencies: `pip install -r requirements.txt`.
+- Ensure `data/chroma_db/` exists (Chroma will initialize it on first run).
+- Run the Streamlit app: `streamlit run app.py`.

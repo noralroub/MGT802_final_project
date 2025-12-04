@@ -10,6 +10,7 @@ try:
     import config
     from core.qa import QASystem
     from core.visual_abstract import VisualAbstractGenerator
+    from agents.extraction_agent import EvidenceExtractorAgent
     # Ensure config loads properly
     _ = config.OPENAI_API_KEY
 except Exception as e:
@@ -69,12 +70,17 @@ with tab1:
                     try:
                         # Initialize QA system and ingest PDF
                         qa_system = QASystem(pdf_path=temp_pdf_path, model=model_choice)
-                        st.success("✅ PDF processed successfully!")
+                        # Run full evidence extraction for structured outputs
+                        extractor = EvidenceExtractorAgent(model=model_choice)
+                        extraction_result = extractor.run_full_extraction(temp_pdf_path)
+
+                        st.success("✅ PDF processed and analyzed successfully!")
 
                         # Store in session state for next tabs
                         st.session_state.qa_system = qa_system
                         st.session_state.pdf_processed = True
                         st.session_state.pdf_name = uploaded_file.name
+                        st.session_state.extraction_result = extraction_result
 
                         st.info("📌 You can now use the Q&A system or generate a visual abstract in the other tabs.")
                     except Exception as e:
@@ -148,8 +154,29 @@ with tab3:
 
     if "pdf_processed" not in st.session_state or not st.session_state.pdf_processed:
         st.warning("⚠️ Please upload and process a PDF first using the 'Upload & Extract' tab.")
+    elif "extraction_result" not in st.session_state:
+        st.info("ℹ️ The PDF was not analyzed yet. Please re-run extraction in the first tab.")
     else:
+        extraction = st.session_state.get("extraction_result", {})
+        structured = extraction.get("structured_abstract", {})
+        visual_data = extraction.get("visual_data", {})
+
         st.success(f"✅ Paper loaded: {st.session_state.pdf_name}")
+
+        with st.expander("View Structured Abstract", expanded=True):
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.subheader("Background")
+                st.write(structured.get("background", ""))
+                st.subheader("Methods")
+                st.write(structured.get("methods", ""))
+            with col_b:
+                st.subheader("Results")
+                st.write(structured.get("results", ""))
+                st.subheader("Conclusions")
+                st.write(structured.get("conclusions", ""))
+
+        st.divider()
 
         col1, col2 = st.columns(2)
 
@@ -157,7 +184,7 @@ with tab3:
             st.subheader("Layout Options")
             layout_type = st.selectbox(
                 "Select layout style:",
-                options=["horizontal_3panel", "vertical_4panel"],
+                options=["horizontal_3panel", "vertical_stacked"],
                 help="Choose how to arrange the visual abstract"
             )
 
@@ -167,34 +194,9 @@ with tab3:
         if st.button("🎨 Generate Visual Abstract", key="visual_abstract_btn"):
             with st.spinner("Generating visual abstract... This may take a moment."):
                 try:
-                    # Create visual abstract generator
-                    qa_system = st.session_state.qa_system
-
-                    # Get QA results for the visual abstract
-                    questions = [
-                        "What is the primary objective?",
-                        "What are the main results?",
-                        "What is the conclusion?",
-                        "How many patients were enrolled?"
-                    ]
-
-                    qa_results = {}
-                    for q in questions:
-                        try:
-                            result = qa_system.generate_answer(q)
-                            qa_results[q] = result['answer']
-                        except:
-                            qa_results[q] = "Data not available"
-
-                    # Create temporary QA results file
-                    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as f:
-                        json.dump(qa_results, f)
-                        qa_results_path = f.name
-
-                    # Generate visual abstract
                     generator = VisualAbstractGenerator(
-                        qa_results_path=qa_results_path,
-                        layout_type=layout_type
+                        layout_type=layout_type,
+                        trial_data=visual_data
                     )
                     generator.generate_abstract()
 
@@ -213,12 +215,6 @@ with tab3:
                         file_name=f"visual_abstract_{Path(st.session_state.pdf_name).stem}.png",
                         mime="image/png"
                     )
-
-                    # Cleanup temp file
-                    try:
-                        os.remove(qa_results_path)
-                    except:
-                        pass
 
                 except Exception as e:
                     st.error(f"Error generating visual abstract: {str(e)}")
