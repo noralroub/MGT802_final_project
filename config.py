@@ -1,5 +1,15 @@
 """Configuration file for the Medical Abstract Generator project."""
 
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# OpenAI Configuration
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+EMBEDDING_MODEL = "text-embedding-3-small"
+EMBEDDING_DIMENSION = 1536
+
 # PDF Parsing Configuration
 CHUNK_SIZE = 1024  # tokens
 CHUNK_OVERLAP = 128  # tokens
