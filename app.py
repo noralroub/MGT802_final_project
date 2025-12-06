@@ -113,25 +113,24 @@ with tab2:
             selected_question = st.selectbox("Select a predefined question:", sample_questions)
         with col2:
             st.write("")  # Spacing
-            if st.button("Ask Selected Question"):
-                custom_question = selected_question
-                should_ask = True
-            else:
-                should_ask = False
+            ask_selected = st.button("Ask Selected Question")
 
         st.subheader("Or Ask Your Own Question")
         custom_question = st.text_input("Enter your question about the paper:")
 
-        if custom_question and st.button("Ask Custom Question"):
-            should_ask = True
-        else:
-            should_ask = False
+        ask_custom = custom_question and st.button("Ask Custom Question")
 
-        if should_ask and custom_question:
+        question_to_ask = None
+        if ask_custom and custom_question:
+            question_to_ask = custom_question
+        elif ask_selected:
+            question_to_ask = selected_question
+
+        if question_to_ask:
             with st.spinner("Generating answer..."):
                 try:
                     qa_system = st.session_state.qa_system
-                    result = qa_system.generate_answer(custom_question)
+                    result = qa_system.generate_answer(question_to_ask)
                     answer = result['answer']
 
                     st.success("Answer Generated:")
