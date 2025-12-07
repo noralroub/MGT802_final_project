@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 
 from ui.visual_template import render_visual_abstract_from_trial
+from ui.editable_abstract import EditableAbstractForm
 
 try:
     import config
@@ -150,7 +151,7 @@ with tab2:
 
 with tab3:
     st.header("Generate Visual Abstract")
-    st.write("Create an infographic-style summary of the clinical trial data.")
+    st.write("Create an infographic-style summary of the clinical trial data. Edit any fields to customize the abstract.")
 
     if "pdf_processed" not in st.session_state or not st.session_state.pdf_processed:
         st.warning("⚠️ Please upload and process a PDF first using the 'Upload & Extract' tab.")
@@ -163,7 +164,7 @@ with tab3:
 
         st.success(f"✅ Paper loaded: {st.session_state.pdf_name}")
 
-        with st.expander("View Structured Abstract", expanded=True):
+        with st.expander("📄 View Structured Abstract", expanded=False):
             col_a, col_b = st.columns(2)
             with col_a:
                 st.subheader("Background")
@@ -178,17 +179,22 @@ with tab3:
 
         st.divider()
 
-        st.subheader("Visual Abstract Preview")
         if not visual_data:
             st.info("Structured visual data not available yet.")
-        elif st.button("🎨 Render Visual Abstract", key="visual_abstract_btn"):
-            with st.spinner("Rendering template..."):
-                try:
-                    render_visual_abstract_from_trial(visual_data, height=820)
-                    st.success("✅ Visual abstract rendered below.")
-                except Exception as e:
-                    st.error(f"Error rendering visual abstract: {str(e)}")
-                    logger.error(f"Visual abstract generation error: {str(e)}")
+        else:
+            try:
+                # Render editable form with live preview
+                edited_data = EditableAbstractForm.render_with_preview(visual_data, height=800)
+
+                st.divider()
+
+                # Show comparison and save options
+                EditableAbstractForm.render_comparison_section(visual_data, edited_data)
+                EditableAbstractForm.render_save_section(edited_data)
+
+            except Exception as e:
+                st.error(f"Error rendering editable abstract: {str(e)}")
+                logger.error(f"Editable abstract error: {str(e)}")
 
 # Footer
 st.markdown("---")
