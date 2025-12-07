@@ -5,7 +5,8 @@ import json
 import os
 from pathlib import Path
 
-from core.visual_abstract import VisualAbstractGenerator
+from utils.data_extraction import TrialDataExtractor
+from ui.visual_template import render_visual_abstract_from_trial
 
 
 def load_demo_qa_results():
@@ -21,21 +22,25 @@ def initialize_session_state():
     """Initialize session state variables."""
     if 'qa_results' not in st.session_state:
         st.session_state.qa_results = None
-    if 'abstract_image' not in st.session_state:
-        st.session_state.abstract_image = None
+    if 'abstract_data' not in st.session_state:
+        st.session_state.abstract_data = None
     if 'demo_loaded' not in st.session_state:
         st.session_state.demo_loaded = False
 
 
 def generate_abstract_from_qa(qa_results):
-    """Generate visual abstract from QA results."""
+    """Convert QA results into structured trial data."""
     try:
-        generator = VisualAbstractGenerator(qa_results_path=None)
-        generator.load_trial_data("data/debug_output/qa_results.json")
-        image = generator.generate_abstract()
-        return image
+        extractor = TrialDataExtractor()
+        if qa_results:
+            trial_data = extractor.extract_key_metrics(qa_results)
+        else:
+            trial_data = extractor.extract_key_metrics(
+                extractor.load_qa_results("data/debug_output/qa_results.json")
+            )
+        return trial_data
     except Exception as e:
-        st.error(f"Error generating abstract: {str(e)}")
+        st.error(f"Error preparing abstract: {str(e)}")
         return None
 
 
@@ -62,7 +67,6 @@ def main():
         **Features:**
         - Display trial infographics
         - Upload QA results JSON
-        - Download as PNG
 
         **Data:** Semaglutide Trial (NEJM 2023)
         """)
@@ -83,46 +87,14 @@ def main():
             if st.button("🔄 Load Demo", use_container_width=True):
                 st.session_state.qa_results = load_demo_qa_results()
                 if st.session_state.qa_results:
-                    st.session_state.abstract_image = generate_abstract_from_qa(st.session_state.qa_results)
+                    st.session_state.abstract_data = generate_abstract_from_qa(st.session_state.qa_results)
                     st.session_state.demo_loaded = True
 
         st.divider()
 
         # Show abstract if loaded
-        if st.session_state.abstract_image:
-            st.image(st.session_state.abstract_image, use_column_width=True)
-
-            # Download buttons
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-                generator = VisualAbstractGenerator()
-                generator.load_trial_data("data/debug_output/qa_results.json")
-                generator.image = st.session_state.abstract_image
-
-                png_bytes = generator.export_as_bytes()
-                st.download_button(
-                    label="📥 Download PNG",
-                    data=png_bytes,
-                    file_name="trial_abstract.png",
-                    mime="image/png",
-                    use_container_width=True
-                )
-
-            with col2:
-                if st.session_state.qa_results:
-                    json_str = json.dumps(st.session_state.qa_results, indent=2)
-                    st.download_button(
-                        label="📥 Download JSON",
-                        data=json_str,
-                        file_name="qa_results.json",
-                        mime="application/json",
-                        use_container_width=True
-                    )
-
-            with col3:
-                st.metric("Trial Status", "✅ Loaded")
-
+        if st.session_state.abstract_data:
+            render_visual_abstract_from_trial(st.session_state.abstract_data, height=820)
         else:
             col1, col2 = st.columns(2)
             with col1:
@@ -179,27 +151,13 @@ def main():
                 st.divider()
 
                 # Generate button
-                if st.button("🎨 Generate Visual Abstract", type="primary", use_container_width=True):
-                    with st.spinner("Generating infographic..."):
-                        # Save uploaded file temporarily
-                        temp_path = "temp_qa_results.json"
-                        with open(temp_path, "w") as f:
-                            json.dump(qa_results, f)
-
-                        try:
-                            generator = VisualAbstractGenerator(qa_results_path=temp_path)
-                            image = generator.generate_abstract()
-                            st.session_state.abstract_image = image
-
-                            st.success("✅ Visual abstract generated!")
-                            st.info("Go to the 'Visual Abstract' tab to view and download")
-
-                        except Exception as e:
-                            st.error(f"Error generating abstract: {str(e)}")
-                        finally:
-                            # Clean up
-                            if Path(temp_path).exists():
-                                Path(temp_path).unlink()
+                if st.button("🎨 Render Visual Abstract", type="primary", use_container_width=True):
+                    with st.spinner("Preparing infographic..."):
+                        st.session_state.abstract_data = generate_abstract_from_qa(qa_results)
+                        if st.session_state.abstract_data:
+                            st.success("✅ Visual abstract ready! View it in the 'Visual Abstract' tab.")
+                        else:
+                            st.error("Unable to create abstract from this file.")
 
             except json.JSONDecodeError:
                 st.error("❌ Invalid JSON file. Please check the format.")
@@ -224,21 +182,18 @@ def main():
 
         st.subheader("2️⃣ Layout Design")
         st.markdown("""
-        Professional 1400×1800px infographic layout:
-        - Header with trial title
-        - 3-column panel: Population, Outcome, Adverse Events
-        - Treatment information section
-        - Body weight comparison
-        - Key conclusions
+        JACC-style HTML layout rendered directly in Streamlit:
+        - Prominent hero banner for key findings
+        - Structured left/right columns for population and results
+        - Custom icons, stat boxes, and bar chart
         """)
 
         st.subheader("3️⃣ Visual Generation")
         st.markdown("""
-        Creates high-quality PNG using PIL/Pillow:
-        - Formatted text with icons
-        - Color-coded sections
-        - Professional typography
-        - Ready for presentations and publications
+        Templates render as responsive HTML components:
+        - Styled via CSS for crisp typography
+        - SVG icons for sharp visuals
+        - Ideal for quick previews and presentations
         """)
 
         st.divider()
@@ -283,21 +238,21 @@ def main():
             st.markdown("""
             **Frontend**
             - Streamlit
-            - Pillow (PIL)
+            - Custom HTML/CSS template
             """)
         with col2:
             st.markdown("""
             **Backend**
             - Python 3.9+
             - OpenAI API
-            - Matplotlib
+            - Trial data extractor
             """)
         with col3:
             st.markdown("""
             **Data**
             - JSON QA results
             - Regex extraction
-            - PNG export
+            - Structured trial schema
             """)
 
         st.divider()

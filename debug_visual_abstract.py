@@ -26,7 +26,7 @@ def main():
     # Step 1: Initialize generator
     print("\n✓ Step 1: Initializing Visual Abstract Generator...")
     try:
-        generator = VisualAbstractGenerator(qa_results_path)
+        generator = VisualAbstractGenerator(qa_results_path, layout_type="modern_card")
         print("  ✓ Generator initialized")
         print(f"    - Trial: {generator.trial_data['trial_info']['title']}")
         print(f"    - Publication: {generator.trial_data['trial_info']['publication']}")

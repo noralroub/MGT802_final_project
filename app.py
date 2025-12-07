@@ -6,10 +6,11 @@ import json
 import logging
 from pathlib import Path
 
+from ui.visual_template import render_visual_abstract_from_trial
+
 try:
     import config
     from core.qa import QASystem
-    from core.visual_abstract import VisualAbstractGenerator
     from agents.extraction_agent import EvidenceExtractorAgent
     # Ensure config loads properly
     _ = config.OPENAI_API_KEY
@@ -177,46 +178,16 @@ with tab3:
 
         st.divider()
 
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.subheader("Layout Options")
-            layout_type = st.selectbox(
-                "Select layout style:",
-                options=["horizontal_3panel", "vertical_stacked"],
-                help="Choose how to arrange the visual abstract"
-            )
-
-        with col2:
-            st.write("")  # Spacing
-
-        if st.button("🎨 Generate Visual Abstract", key="visual_abstract_btn"):
-            with st.spinner("Generating visual abstract... This may take a moment."):
+        st.subheader("Visual Abstract Preview")
+        if not visual_data:
+            st.info("Structured visual data not available yet.")
+        elif st.button("🎨 Render Visual Abstract", key="visual_abstract_btn"):
+            with st.spinner("Rendering template..."):
                 try:
-                    generator = VisualAbstractGenerator(
-                        layout_type=layout_type,
-                        trial_data=visual_data
-                    )
-                    generator.generate_abstract()
-
-                    # Get image as bytes
-                    image_bytes = generator.export_as_bytes()
-
-                    st.success("✅ Visual abstract generated successfully!")
-
-                    # Display image
-                    st.image(image_bytes, use_column_width=True)
-
-                    # Download button
-                    st.download_button(
-                        label="📥 Download Visual Abstract",
-                        data=image_bytes,
-                        file_name=f"visual_abstract_{Path(st.session_state.pdf_name).stem}.png",
-                        mime="image/png"
-                    )
-
+                    render_visual_abstract_from_trial(visual_data, height=820)
+                    st.success("✅ Visual abstract rendered below.")
                 except Exception as e:
-                    st.error(f"Error generating visual abstract: {str(e)}")
+                    st.error(f"Error rendering visual abstract: {str(e)}")
                     logger.error(f"Visual abstract generation error: {str(e)}")
 
 # Footer

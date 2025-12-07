@@ -38,11 +38,11 @@ class Colors:
 @dataclass
 class Typography:
     """Font settings."""
-    title_size: int = 28
-    section_header_size: int = 16
-    label_size: int = 13
-    value_size: int = 14
-    small_size: int = 11
+    title_size: int = 32
+    section_header_size: int = 20
+    label_size: int = 16
+    value_size: int = 18
+    small_size: int = 13
 
 
 class LayoutDesigner:
@@ -57,9 +57,16 @@ class LayoutDesigner:
         """
         self.layout_type = layout_type
         self.dims = Dimensions()
+        if layout_type == "modern_card":
+            self.dims.width = 1200
+            self.dims.height = 1600
+            self.dims.margin = 40
+            self.dims.padding = 25
+        self.dims.col_width = (self.dims.width - 2 * self.dims.margin - 2 * self.dims.padding) // 3
         self.colors = Colors()
         self.typo = Typography()
         self.sections = self._define_sections()
+        self.theme_tokens = self._define_theme_tokens()
 
     def _define_sections(self) -> Dict[str, Dict[str, Any]]:
         """Define section positions and dimensions for horizontal 3-panel layout."""
@@ -67,6 +74,8 @@ class LayoutDesigner:
             return self._horizontal_3panel_layout()
         elif self.layout_type == "vertical_stacked":
             return self._vertical_stacked_layout()
+        elif self.layout_type == "modern_card":
+            return self._modern_card_layout()
         else:
             raise ValueError(f"Unknown layout type: {self.layout_type}")
 
@@ -221,6 +230,106 @@ class LayoutDesigner:
                 "text_color": (150, 150, 150),
             },
         }
+
+    def _modern_card_layout(self) -> Dict[str, Dict[str, Any]]:
+        """Define compact two-column card layout."""
+        margin = self.dims.margin
+        card_width = self.dims.width - 2 * margin
+        card_height = self.dims.height - 2 * margin
+        header_height = 80
+        hero_height = 220
+        footer_height = 50
+        card_x = margin
+        card_y = margin
+        hero_y = card_y + header_height
+        content_top = hero_y + hero_height
+        content_height = card_height - header_height - hero_height - footer_height
+        left_width = int(card_width * 0.55)
+        right_width = card_width - left_width
+        inner_padding = 30
+        results_height = 300
+
+        return {
+            "card": {
+                "x": card_x,
+                "y": card_y,
+                "width": card_width,
+                "height": card_height,
+                "radius": 12,
+            },
+            "header": {
+                "x": card_x,
+                "y": card_y,
+                "width": card_width,
+                "height": header_height,
+            },
+            "hero": {
+                "x": card_x,
+                "y": hero_y,
+                "width": card_width,
+                "height": hero_height,
+            },
+            "left_column": {
+                "x": card_x,
+                "y": content_top,
+                "width": left_width,
+                "height": content_height,
+                "padding": inner_padding,
+            },
+            "right_column": {
+                "x": card_x + left_width,
+                "y": content_top,
+                "width": right_width,
+                "height": content_height,
+                "padding": inner_padding,
+            },
+            "results_box": {
+                "x": card_x + left_width + inner_padding,
+                "y": content_top + inner_padding,
+                "width": right_width - 2 * inner_padding,
+                "height": results_height,
+                "radius": 12,
+            },
+            "chart": {
+                "x": card_x + left_width + inner_padding,
+                "y": content_top + inner_padding + results_height + inner_padding,
+                "width": right_width - 2 * inner_padding,
+                "height": content_height - results_height - 3 * inner_padding,
+                "radius": 12,
+            },
+            "footer": {
+                "x": card_x,
+                "y": card_y + card_height - footer_height,
+                "width": card_width,
+                "height": footer_height,
+            },
+        }
+
+    def _define_theme_tokens(self) -> Dict[str, Any]:
+        """Return theme tokens for supported layouts."""
+        if self.layout_type == "modern_card":
+            return {
+                "navy_dark": (26, 39, 68),
+                "navy_medium": (45, 62, 95),
+                "red_primary": (196, 30, 58),
+                "red_dark": (158, 24, 48),
+                "gold": (212, 168, 75),
+                "teal": (74, 155, 155),
+                "blue_light": (91, 140, 201),
+                "white": (255, 255, 255),
+                "gray_light": (245, 245, 245),
+                "gray_medium": (224, 224, 224),
+                "gray_text": (102, 102, 102),
+                "black": (26, 26, 26),
+                "bar_blue": (59, 111, 160),
+                "bar_red": (196, 30, 58),
+                "bar_gray": (122, 136, 153),
+            }
+        return {}
+
+    def get_theme_tokens(self) -> Dict[str, Any]:
+        """Expose theme tokens for templates that require them."""
+        return self.theme_tokens
 
     def get_section(self, section_name: str) -> Dict[str, Any]:
         """Get layout information for a section."""

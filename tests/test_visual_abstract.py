@@ -205,7 +205,7 @@ class TestVisualAbstractGenerator:
     def generator(self):
         """Create generator instance."""
         from core.visual_abstract import VisualAbstractGenerator
-        return VisualAbstractGenerator("data/debug_output/qa_results.json")
+        return VisualAbstractGenerator("data/debug_output/qa_results.json", layout_type="horizontal_3panel")
 
     def test_generator_initialization(self, generator):
         """Test generator initialization."""
@@ -263,7 +263,7 @@ class TestIntegration:
         from core.visual_abstract import VisualAbstractGenerator
 
         # Initialize
-        generator = VisualAbstractGenerator("data/debug_output/qa_results.json")
+        generator = VisualAbstractGenerator("data/debug_output/qa_results.json", layout_type="horizontal_3panel")
 
         # Generate
         image = generator.generate_abstract()
@@ -283,7 +283,7 @@ class TestIntegration:
         from core.visual_abstract import VisualAbstractGenerator
 
         # This should not crash even if data is incomplete
-        generator = VisualAbstractGenerator("data/debug_output/qa_results.json")
+        generator = VisualAbstractGenerator("data/debug_output/qa_results.json", layout_type="horizontal_3panel")
         image = generator.generate_abstract()
 
         assert image is not None
