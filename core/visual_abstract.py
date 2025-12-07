@@ -23,21 +23,89 @@ class VisualAbstractGenerator:
         self.extractor = TrialDataExtractor()
         self.designer = LayoutDesigner(layout_type)
         self.builder = ChartBuilder()
-        self.trial_data = trial_data
+        self.trial_data = self._normalize_trial_data(trial_data) if trial_data else None
         self.image = None
 
         if qa_results_path and trial_data is None:
             qa_results = self.extractor.load_qa_results(qa_results_path)
-            self.trial_data = self.extractor.extract_key_metrics(qa_results)
+            self.trial_data = self._normalize_trial_data(self.extractor.extract_key_metrics(qa_results))
 
     def load_trial_data(self, qa_results_path: str) -> None:
         """Load trial data from QA results."""
         qa_results = self.extractor.load_qa_results(qa_results_path)
-        self.trial_data = self.extractor.extract_key_metrics(qa_results)
+        self.trial_data = self._normalize_trial_data(self.extractor.extract_key_metrics(qa_results))
 
     def set_trial_data(self, trial_data: Dict[str, Any]) -> None:
         """Set trial data directly (already structured)."""
-        self.trial_data = trial_data
+        self.trial_data = self._normalize_trial_data(trial_data)
+
+    def _normalize_trial_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Normalize LLM output into the keys the renderer expects.
+        Handles common variations like 'effect' vs 'effect_measure' and fills safe defaults.
+        """
+        if not data:
+            return {}
+
+        normalized = {}
+
+        trial = data.get("trial_info", {})
+        normalized["trial_info"] = {
+            "title": trial.get("title") or trial.get("trial_title") or "",
+            "drug": trial.get("drug") or trial.get("intervention") or "",
+            "indication": trial.get("indication") or "",
+            "trial_name": trial.get("trial_name") or trial.get("name") or "",
+            "publication": trial.get("publication") or trial.get("journal") or "",
+        }
+
+        pop = data.get("population", {})
+        normalized["population"] = {
+            "total_enrolled": pop.get("total_enrolled") or pop.get("n_enrolled"),
+            "arm_1_label": pop.get("arm_1_label") or pop.get("arm1_label") or pop.get("arm_1") or "Arm 1",
+            "arm_1_size": pop.get("arm_1_size") or pop.get("arm1_size"),
+            "arm_2_label": pop.get("arm_2_label") or pop.get("arm2_label") or pop.get("arm_2") or "Arm 2",
+            "arm_2_size": pop.get("arm_2_size") or pop.get("arm2_size"),
+            "age_mean": pop.get("age_mean") or pop.get("mean_age"),
+        }
+
+        primary = data.get("primary_outcome", {})
+        normalized["primary_outcome"] = {
+            "label": primary.get("label") or primary.get("name") or "Primary outcome",
+            "effect_measure": primary.get("effect_measure") or primary.get("effect") or primary.get("definition"),
+            "estimate": primary.get("estimate") or primary.get("hazard_ratio") or primary.get("value"),
+            "ci": primary.get("ci") or primary.get("confidence_interval"),
+            "p_value": primary.get("p_value") or primary.get("p"),
+        }
+
+        events = data.get("event_rates", {})
+        normalized["event_rates"] = {
+            "arm_1_percent": events.get("arm_1_percent") or events.get("arm1_percent") or events.get("arm_1") or events.get("arm1"),
+            "arm_2_percent": events.get("arm_2_percent") or events.get("arm2_percent") or events.get("arm_2") or events.get("arm2"),
+        }
+
+        ae = data.get("adverse_events", {})
+        normalized["adverse_events"] = {
+            "summary": ae.get("summary") or "",
+            "notable": ae.get("notable") or ae.get("details") or [],
+        }
+
+        dosing = data.get("dosing", {})
+        normalized["dosing"] = {
+            "description": dosing.get("description") or dosing.get("dosing") or "",
+        }
+
+        bw = data.get("body_weight", {})
+        normalized["body_weight"] = {
+            "arm_1_change_percent": bw.get("arm_1_change_percent") or bw.get("arm1_change_percent"),
+            "arm_2_change_percent": bw.get("arm_2_change_percent") or bw.get("arm2_change_percent"),
+        }
+
+        conclusions = data.get("conclusions") or data.get("conclusion") or []
+        if isinstance(conclusions, str):
+            conclusions = [conclusions]
+        normalized["conclusions"] = conclusions
+
+        return normalized
 
     def _get_font(self, size: int) -> ImageFont.FreeTypeFont:
         """Get system font or default."""
@@ -355,3 +423,4 @@ P: {p_value or 'n/a'}"""
         if self.image is None:
             raise ValueError("No image generated. Call generate_abstract() first.")
         return self.image
+ 
