@@ -10,7 +10,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, Any
 
-from core.pdf_ingest import pipeline_pdf_to_chunks, detect_sections, extract_section
+from core.pdf_ingest import pipeline_pdf_to_chunks, detect_sections
 from agents.summary_agent import SummaryAgent
 from agents.combiner_agent import CombinerAgent
 from agents.metadata_agent import MetadataAgent
@@ -59,15 +59,21 @@ class Phase2Orchestrator:
         """
         logger.info(f"Starting extraction pipeline for {pdf_path}")
 
+        # Cache the ingest result to avoid double PDF processing
+        self._cached_ingest = pipeline_pdf_to_chunks(pdf_path)
+
         # Stage 1: Generate paper overview
         logger.info("Stage 1: Generating paper overview...")
-        overview = self._generate_overview(pdf_path)
+        overview = self._generate_overview()
         logger.info("✓ Paper overview generated")
 
         # Stage 2: Extract specialized information
         logger.info("Stage 2: Extracting specialized information...")
-        extracted = self._extract_specialized(pdf_path, overview)
+        extracted = self._extract_specialized(overview)
         logger.info("✓ Specialized extraction complete")
+
+        # Clear cache
+        self._cached_ingest = None
 
         # Stage 3: Fact-check
         logger.info("Stage 3: Validating extracted data...")
@@ -82,17 +88,16 @@ class Phase2Orchestrator:
         logger.info("Extraction pipeline complete")
         return extracted
 
-    def _generate_overview(self, pdf_path: str) -> str:
+    def _generate_overview(self) -> str:
         """Stage 1: Generate paper overview from chunks.
 
-        Args:
-            pdf_path: Path to PDF
+        Uses cached ingest result from extract_all() to avoid double-processing.
 
         Returns:
             Comprehensive paper overview (string)
         """
-        # Ingest PDF and create chunks
-        ingest_result = pipeline_pdf_to_chunks(pdf_path)
+        # Use cached ingest result (computed once in extract_all)
+        ingest_result = self._cached_ingest
         chunks = ingest_result.get("chunks", [])
 
         if not chunks:
@@ -135,31 +140,58 @@ class Phase2Orchestrator:
         overview = self.combiner_agent.extract(summaries)
         return overview
 
+    def _extract_section_from_map(self, full_text: str, sections: Dict[str, int], section_name: str) -> str:
+        """Extract section text using pre-computed section map (avoids repeated detection).
+
+        Args:
+            full_text: Full document text
+            sections: Pre-computed section positions from detect_sections()
+            section_name: Name of section to extract
+
+        Returns:
+            Text content of the section, or empty string if not found
+        """
+        section_lower = section_name.lower()
+
+        if section_lower not in sections:
+            # Only warn once per missing section during orchestration
+            logger.debug(f"Section '{section_name}' not found in document")
+            return ""
+
+        start_pos = sections[section_lower]
+
+        # Find next section position
+        end_pos = len(full_text)
+        for pos in sections.values():
+            if pos > start_pos:
+                end_pos = min(end_pos, pos)
+
+        return full_text[start_pos:end_pos].strip()
+
     def _extract_specialized(
-        self, pdf_path: str, overview: str
+        self, overview: str
     ) -> Dict[str, Any]:
         """Stage 2: Extract specialized information.
 
         Args:
-            pdf_path: Path to PDF
             overview: Paper overview from Stage 1
 
         Returns:
             Dict with all extracted information
         """
-        # Extract sections from PDF
-        ingest_result = pipeline_pdf_to_chunks(pdf_path)
+        # Use cached ingest result (computed once in extract_all)
+        ingest_result = self._cached_ingest
         full_text = ingest_result.get("raw_text", "")
 
-        # Detect sections
+        # Detect sections once, reuse for extraction
         sections = detect_sections(full_text)
 
-        # Extract specific sections
-        abstract = extract_section(full_text, 'abstract') or ''
-        intro = extract_section(full_text, 'introduction') or ''
-        methods = extract_section(full_text, 'methods') or ''
-        results = extract_section(full_text, 'results') or ''
-        discussion = extract_section(full_text, 'discussion') or ''
+        # Extract specific sections using helper function
+        abstract = self._extract_section_from_map(full_text, sections, 'abstract')
+        intro = self._extract_section_from_map(full_text, sections, 'introduction')
+        methods = self._extract_section_from_map(full_text, sections, 'methods')
+        results = self._extract_section_from_map(full_text, sections, 'results')
+        discussion = self._extract_section_from_map(full_text, sections, 'discussion')
 
         # Run specialized agents in parallel
         extracted = {}

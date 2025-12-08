@@ -87,7 +87,9 @@ with tab1:
                         # Show extraction summary
                         col_summary1, col_summary2, col_summary3 = st.columns(3)
                         with col_summary1:
-                            st.metric("Title", extraction_result.get("metadata", {}).get("title", "N/A")[:50] + "...")
+                            title = extraction_result.get("metadata", {}).get("title", "N/A")
+                            title_display = (title[:50] + "...") if title and title != "N/A" else title
+                            st.metric("Title", title_display)
                         with col_summary2:
                             st.metric("Population", extraction_result.get("design", {}).get("population_size", "N/A"))
                         with col_summary3:
