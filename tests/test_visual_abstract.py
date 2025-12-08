@@ -44,20 +44,20 @@ class TestDataExtraction:
         assert demo['placebo_arm'] == 8801
 
     def test_extract_outcomes(self, extractor, qa_results):
-        """Test outcome extraction."""
-        outcomes = extractor.extract_outcomes(qa_results)
+        """Test primary outcome extraction."""
+        outcomes = extractor.extract_primary_outcome(qa_results)
 
         assert outcomes['hazard_ratio'] == 0.8
         assert outcomes['ci_lower'] == 0.72
         assert outcomes['ci_upper'] == 0.9
-        assert outcomes['p_value'] == '<0.001'
+        assert outcomes['p_value'] == 'p < 0.001'
 
     def test_extract_adverse_events(self, extractor, qa_results):
         """Test adverse event extraction."""
         ae = extractor.extract_adverse_events(qa_results)
 
-        assert ae['discontinuation']['drug'] == 16.6
-        assert ae['discontinuation']['placebo'] == 8.2
+        assert 'GI symptoms' in ae['summary']
+        assert len(ae['notable']) >= 1
 
     def test_extract_dosing(self, extractor, qa_results):
         """Test dosing extraction."""
@@ -65,7 +65,7 @@ class TestDataExtraction:
 
         assert dosing['dose'] == '2.4 mg'
         assert dosing['frequency'] == 'weekly'
-        assert dosing['at_target_percent'] == 77.0
+        assert 'Once-weekly' in dosing['description']
 
     def test_extract_key_metrics(self, extractor, qa_results):
         """Test complete metric extraction."""

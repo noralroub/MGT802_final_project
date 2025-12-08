@@ -1,32 +1,53 @@
 """Debug script for Sprint 4 - Tests full pipeline end-to-end."""
 
-import json
+import argparse
 from pathlib import Path
+
+from agents.extraction_agent import EvidenceExtractorAgent
 from core.visual_abstract import VisualAbstractGenerator
 
 
 def main():
-    """Test full pipeline with existing QA results."""
+    """Test full pipeline with an uploaded PDF."""
     print("\n" + "=" * 70)
     print("SPRINT 4 DEBUG SCRIPT - FULL PIPELINE TEST")
     print("=" * 70)
 
     # Paths
-    qa_results_path = "data/debug_output/qa_results.json"
-    output_path = "data/debug_output/trial_abstract.png"
+    parser = argparse.ArgumentParser(
+        description="Generate a visual abstract from a clinical trial PDF."
+    )
+    parser.add_argument("pdf_path", help="Path to the clinical trial PDF to analyze")
+    parser.add_argument(
+        "--output",
+        help="Destination for the rendered visual abstract PNG",
+        default="data/debug_output/trial_abstract.png"
+    )
+    args = parser.parse_args()
+
+    pdf_path = args.pdf_path
+    output_path = args.output
+
 
     # Verify input file exists
     print("\n✓ Checking input files...")
-    if not Path(qa_results_path).exists():
-        print(f"❌ QA results file not found: {qa_results_path}")
+    if not Path(pdf_path).exists():
+        print(f"❌ PDF not found: {pdf_path}")
         return
+    print(f"  ✓ PDF found: {pdf_path}")
 
-    print(f"  ✓ QA results found: {qa_results_path}")
+    extractor = EvidenceExtractorAgent()
+    print("\n✓ Step 0: Running the extraction pipeline on the PDF...")
+    extraction_result = extractor.run_full_extraction(pdf_path)
+    visual_data = extraction_result.get("visual_data", {})
+    if not visual_data:
+        print("❌ Extraction did not produce visual data")
+        return
 
     # Step 1: Initialize generator
     print("\n✓ Step 1: Initializing Visual Abstract Generator...")
     try:
-        generator = VisualAbstractGenerator(qa_results_path, layout_type="modern_card")
+        generator = VisualAbstractGenerator(layout_type="modern_card", trial_data=visual_data)
         print("  ✓ Generator initialized")
         print(f"    - Trial: {generator.trial_data['trial_info']['title']}")
         print(f"    - Publication: {generator.trial_data['trial_info']['publication']}")
@@ -46,9 +67,10 @@ def main():
 
         print(f"  ✓ Primary Outcome:")
         outcome = trial_data['primary_outcome']
+        event_rates = trial_data.get('event_rates', {})
         print(f"    - HR: {outcome['hazard_ratio']} (95% CI: {outcome['ci_lower']}-{outcome['ci_upper']})")
         print(f"    - P-value: {outcome['p_value']}")
-        print(f"    - Event rates: {outcome['semaglutide_rate']}% vs {outcome['placebo_rate']}%")
+        print(f"    - Event rates: {event_rates.get('arm_1_percent')}% vs {event_rates.get('arm_2_percent')}%")
 
         print(f"  ✓ Body Weight:")
         bw = trial_data['body_weight']
@@ -58,8 +80,9 @@ def main():
 
         print(f"  ✓ Adverse Events:")
         ae = trial_data['adverse_events']
-        print(f"    - Discontinuation: {ae['discontinuation']['drug']}% vs {ae['discontinuation']['placebo']}%")
-        print(f"    - GI Symptoms: {ae['gastrointestinal']['drug']}% vs {ae['gastrointestinal']['placebo']}%")
+        print(f"    - Summary: {ae.get('summary', 'N/A')}")
+        for item in ae.get('notable', []):
+            print(f"      • {item}")
 
     except Exception as e:
         print(f"❌ Failed to verify trial data: {e}")
