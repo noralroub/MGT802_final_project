@@ -29,23 +29,31 @@ class MetadataAgent:
         self.model = model
         self.temperature = temperature
 
-    def extract(self, abstract_text: str, paper_overview: str) -> Dict[str, Any]:
+    def extract(self, abstract_text: str, paper_overview: str, fallback_text: str = "") -> Dict[str, Any]:
         """Extract metadata from abstract and overview.
 
         Args:
             abstract_text: The abstract section from the paper
             paper_overview: The combined overview from CombinerAgent
+            fallback_text: Additional text to use when abstract is missing (e.g., first page)
 
         Returns:
             Dict with metadata fields
         """
-        if not abstract_text or len(abstract_text.strip()) < 50:
+        source_text = abstract_text or ""
+
+        # If abstract is missing/short, try fallback text, then overview
+        if len(source_text.strip()) < 50 and fallback_text:
+            source_text = fallback_text
+        if len(source_text.strip()) < 50 and paper_overview:
+            source_text = paper_overview
+        if len(source_text.strip()) < 50:
             return self._empty_result()
 
         prompt = f"""Extract metadata from this research paper abstract and overview.
 
 Abstract:
-{abstract_text[:1000]}
+{source_text[:1000]}
 
 Paper Overview:
 {paper_overview[:1500]}

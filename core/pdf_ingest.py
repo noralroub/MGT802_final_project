@@ -40,28 +40,35 @@ def extract_text_from_pdf(pdf_path: str) -> str:
 
 def detect_sections(text: str) -> Dict[str, int]:
     """
-    Detect section headers in the text using regex (case-insensitive).
+    Detect section headers using canonical names plus common synonyms.
 
     Args:
         text: Full document text
 
     Returns:
-        Dictionary mapping section name to character position in text
+        Dictionary mapping canonical section name to character position in text
     """
-    from config import SECTION_HEADERS
+    from config import SECTION_HEADERS, SECTION_SYNONYMS
 
     sections = {}
+    if not text:
+        return sections
 
-    for section in SECTION_HEADERS:
-        # Case-insensitive search for section headers
-        # Match header with optional whitespace, but don't require line boundaries
-        pattern = rf"\b{re.escape(section)}\b"
-        match = re.search(pattern, text, re.IGNORECASE)
+    for canonical in SECTION_HEADERS:
+        synonyms = SECTION_SYNONYMS.get(canonical, [canonical])
+        earliest_match = None
 
-        if match:
-            sections[section.lower()] = match.start()
+        for header in synonyms:
+            pattern = rf"\b{re.escape(header)}\b"
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                if earliest_match is None or match.start() < earliest_match:
+                    earliest_match = match.start()
+
+        if earliest_match is not None:
+            sections[canonical.lower()] = earliest_match
         else:
-            logger.warning(f"Section '{section}' not found in document")
+            logger.warning(f"Section '{canonical}' not found in document")
 
     return sections
 
@@ -175,6 +182,15 @@ def pipeline_pdf_to_chunks(pdf_path: str) -> Dict:
     # Extract text
     raw_text = extract_text_from_pdf(pdf_path)
 
+    # Grab first-page text as a metadata fallback
+    first_page_text = ""
+    try:
+        with pdfplumber.open(pdf_path) as pdf:
+            if pdf.pages:
+                first_page_text = pdf.pages[0].extract_text() or ""
+    except Exception as e:
+        logger.warning(f"Could not extract first page text: {e}")
+
     # Detect sections
     section_positions = detect_sections(raw_text)
     sections = {}
@@ -190,6 +206,7 @@ def pipeline_pdf_to_chunks(pdf_path: str) -> Dict:
 
     return {
         "raw_text": raw_text,
+        "first_page_text": first_page_text,
         "sections": sections,
         "chunks": chunks,
         "metadata": {

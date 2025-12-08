@@ -27,6 +27,47 @@ SECTION_HEADERS = [
     "references",
 ]
 
+# Common synonyms/aliases for section detection (mapped to canonical headers above)
+SECTION_SYNONYMS = {
+    "abstract": ["abstract"],
+    "introduction": [
+        "introduction",
+        "background",
+        "importance",
+        "objective",
+        "objectives",
+        "context",
+    ],
+    "methods": [
+        "methods",
+        "methodology",
+        "design",
+        "study design",
+        "design, setting, and participants",
+        "setting and participants",
+        "patients and methods",
+        "interventions",
+        "main outcomes and measures",
+        "outcomes and measures",
+        "trial design",
+    ],
+    "results": [
+        "results",
+        "findings",
+        "outcomes",
+        "main results",
+        "trial outcomes",
+    ],
+    "discussion": [
+        "discussion",
+        "conclusion",
+        "conclusions",
+        "conclusions and relevance",
+        "interpretation",
+        "commentary",
+    ],
+}
+
 # Paths
 DATA_DIR = "data"
 PAPERS_DIR = "data/papers"

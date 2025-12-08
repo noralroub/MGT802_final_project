@@ -168,6 +168,15 @@ class Phase2Orchestrator:
 
         return full_text[start_pos:end_pos].strip()
 
+    def _pick_text(self, primary: str, fallback: str, min_chars: int = 80) -> str:
+        """Select primary text when available, otherwise return fallback."""
+        primary_clean = primary.strip() if primary else ""
+        if len(primary_clean) >= min_chars:
+            return primary_clean
+
+        fallback_clean = fallback.strip() if fallback else ""
+        return fallback_clean or primary_clean
+
     def _extract_specialized(
         self, overview: str
     ) -> Dict[str, Any]:
@@ -182,6 +191,7 @@ class Phase2Orchestrator:
         # Use cached ingest result (computed once in extract_all)
         ingest_result = self._cached_ingest
         full_text = ingest_result.get("raw_text", "")
+        first_page_text = ingest_result.get("first_page_text", "")
 
         # Detect sections once, reuse for extraction
         sections = detect_sections(full_text)
@@ -193,25 +203,32 @@ class Phase2Orchestrator:
         results = self._extract_section_from_map(full_text, sections, 'results')
         discussion = self._extract_section_from_map(full_text, sections, 'discussion')
 
+        # Choose best-available text for each agent to reduce empty outputs
+        abstract_for_agent = self._pick_text(abstract, first_page_text or overview, min_chars=50)
+        intro_for_agent = self._pick_text(intro, overview)
+        methods_for_agent = self._pick_text(methods, overview)
+        results_for_agent = self._pick_text(results, overview)
+        discussion_for_agent = self._pick_text(discussion, overview)
+
         # Run specialized agents in parallel
         extracted = {}
 
         with ThreadPoolExecutor(max_workers=5) as executor:
             # Submit all agents
             metadata_future = executor.submit(
-                self.metadata_agent.extract, abstract, overview
+                self.metadata_agent.extract, abstract_for_agent, overview, first_page_text or overview
             )
             background_future = executor.submit(
-                self.background_agent.extract, intro, overview
+                self.background_agent.extract, intro_for_agent, overview
             )
             design_future = executor.submit(
-                self.design_agent.extract, methods, overview
+                self.design_agent.extract, methods_for_agent, overview
             )
             results_future = executor.submit(
-                self.results_agent.extract, results, overview
+                self.results_agent.extract, results_for_agent, overview
             )
             limitations_future = executor.submit(
-                self.limitations_agent.extract, discussion, overview
+                self.limitations_agent.extract, discussion_for_agent, overview
             )
 
             # Collect results
