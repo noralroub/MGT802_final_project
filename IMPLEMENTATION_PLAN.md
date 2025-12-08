@@ -79,132 +79,200 @@ class VisualAbstractContent:
 
 ---
 
-### Phase 2: Flexible Extraction Agents (Week 2)
-**Goal:** Replace PICOT-based extraction with flexible agent system
+### Phase 2: Flexible Extraction Agents (1 week)
+**Goal:** Replace PICOT-based extraction with intelligent agent pipeline + iterative summaries
 
-#### 2.1 Analyze Current Extraction (`agents/extraction_agent.py`)
-Current issues:
-- Forces PICOT structure on all papers
-- Asks specific "P-I-C-O-T" questions expecting JSON back
-- Hallucination when trials don't fit mold (e.g., observational studies)
+**Architecture:** Iterative Summaries + Specialized Agents + Fact-Checking (NO CrewAI, avoid overengineering)
 
-#### 2.2 Design New Agent Architecture
-Instead of "extract PICOT", design focused agents that extract what's actually there:
+#### 2.1 Stage 1: Parallel Summaries (Your Professor's Insight)
+**Purpose:** Give all agents a high-level paper overview to improve extraction quality
 
-**Agent 1: MetadataAgent** (Extract metadata)
-- Paper title, journal, year, authors, DOI
-- Study type (RCT, observational, meta-analysis, etc.)
-- Funding source
 ```python
-class MetadataAgent:
-    extract(text_chunks) -> {
-        'title': str,
-        'journal': str,
-        'year': int,
-        'authors': List[str],
-        'doi': str,
-        'study_type': str  # categorical: RCT, observational, meta-analysis, etc.
+class SummaryAgent:
+    """Summarize 10% chunk of paper"""
+    extract(chunk: str) -> {
+        'summary': str,  # 200-300 word summary of chunk
+        'key_points': List[str]
     }
+
+# Run 10 SummaryAgents in parallel (10% of paper each)
+summaries = run_parallel([
+    SummaryAgent(chunk_1),
+    SummaryAgent(chunk_2),
+    # ... 10 agents total
+])
+
+# Combine summaries into comprehensive overview
+overview = CombinerAgent(summaries) -> str  # 1-2 page paper overview
 ```
 
-**Agent 2: BackgroundAgent** (Extract study rationale)
-- Why study was done
-- Clinical context
-- Previous evidence gaps
+**Benefit:** All downstream agents start with paper context → better extraction accuracy
+
+#### 2.2 Stage 2: Specialized Extraction (Use Overview + Relevant Sections)
+
+**Agent 1: MetadataAgent**
+- Input: Abstract + Overview
+- Output: `{title, authors, journal, year, doi, study_type}`
+
+**Agent 2: BackgroundAgent**
+- Input: Introduction + Overview
+- Output: `{background, research_question}`
+
+**Agent 3: DesignAgent**
+- Input: Methods + Overview
+- Output: `{population_size, intervention, comparator, primary_outcomes}`
+
+**Agent 4: ResultsAgent**
+- Input: Results + Overview
+- Output: `{main_finding, key_results, adverse_events}`
+
+**Agent 5: LimitationsAgent**
+- Input: Discussion + Overview
+- Output: `{limitations}`
+
 ```python
-class BackgroundAgent:
-    extract(text_chunks) -> {
-        'background': str,  # 2-4 sentence summary
-        'research_question': str
-    }
+# Implementation
+overview = paper_overview  # From Stage 1
+
+metadata = MetadataAgent.extract(abstract, overview)
+background = BackgroundAgent.extract(intro, overview)
+design = DesignAgent.extract(methods, overview)
+results = ResultsAgent.extract(results_section, overview)
+limitations = LimitationsAgent.extract(discussion, overview)
 ```
 
-**Agent 3: StudyDesignAgent** (Extract study structure)
-- Generic design extraction (not PICOT-specific)
-- Population size, intervention type, comparator, outcomes
-- Flexible to different study types
+#### 2.3 Stage 3: Quality Checks (Simple Fact-Checking)
+
+**FactChecker:** Validate numbers are realistic
 ```python
-class StudyDesignAgent:
-    extract(text_chunks) -> {
-        'study_type': str,
-        'population': str,  # "10,000 adults aged 18-65"
-        'population_size': int,
-        'intervention': str,
-        'comparator': str,
-        'primary_outcomes': List[str]
-    }
+class FactChecker:
+    """Simple validation - no LLM calls"""
+    validate(extracted_data):
+        # Check numbers are in reasonable ranges
+        # HR should be 0.01-10 for cardiovascular
+        # n should be > 0
+        # p-values should be 0-1
+        # Age should be 0-120
+        # etc.
+        return validation_report
 ```
 
-**Agent 4: ResultsAgent** (Extract outcomes)
-- Primary outcome
-- Key secondary outcomes
-- Adverse events
-- Safety data
+No agent debates, no creativity - just catch obvious errors.
+
+#### 2.4 Integration with Phase 1 (NO UI CHANGES)
+
+**Data Flow:**
+```
+User uploads PDF (Tab 1: Upload & Extract)
+    ↓
+Run extraction:
+  - Stage 1: Generate paper overview
+  - Stage 2: Extract metadata, background, design, results, limitations
+  - Stage 3: Fact-check numbers
+    ↓
+Auto-populate Tab 3 (Visual Abstract) with extracted data
+    ↓
+User can edit in sidebar (just like Phase 1 - no changes)
+```
+
+**Key:** Keep Phase 1's Visual Abstract tab EXACTLY as-is. Just pre-fill with better data.
+
+#### 2.5 Implementation Details
+
+**Files to Create:**
+- `/agents/summary_agent.py` - Summarize paper chunks
+- `/agents/combiner_agent.py` - Combine 10 summaries
+- `/agents/metadata_agent.py` - Extract metadata
+- `/agents/background_agent.py` - Extract background
+- `/agents/design_agent.py` - Extract study design
+- `/agents/results_agent.py` - Extract results
+- `/agents/limitations_agent.py` - Extract limitations
+- `/agents/fact_checker.py` - Simple validation (no LLM)
+- `/agents/phase2_orchestrator.py` - Orchestrate all stages
+
+**Files to Modify:**
+- `/app.py` - Call orchestrator instead of old extraction_agent
+- Keep extraction progress visible (show which stage running)
+
+**No Changes:**
+- Phase 1 Visual Abstract tab (same UI, better pre-filled data)
+- `/core/` modules (still using RAG pipeline)
+- `/utils/visual_abstract_html.py` (no changes)
+
+#### 2.6 Parallel Execution Strategy
+
+Use `concurrent.futures` for simple parallelism (avoid asyncio complexity):
+
 ```python
-class ResultsAgent:
-    extract(text_chunks) -> {
-        'main_finding': str,
-        'key_results': List[str],  # structured results with numbers
-        'adverse_events': List[dict]
-    }
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+with ThreadPoolExecutor(max_workers=10) as executor:
+    # Run 10 summary agents in parallel
+    summary_futures = [
+        executor.submit(SummaryAgent.extract, chunk)
+        for chunk in chunks[:10]
+    ]
+
+    summaries = [f.result() for f in as_completed(summary_futures)]
+
+# Combine summaries (single call)
+overview = CombinerAgent.extract(summaries)
+
+# Run 5 specialized agents (can be parallel too)
+with ThreadPoolExecutor(max_workers=5) as executor:
+    metadata_task = executor.submit(MetadataAgent.extract, abstract, overview)
+    background_task = executor.submit(BackgroundAgent.extract, intro, overview)
+    # ... etc
 ```
 
-**Agent 5: LimitationsAgent** (Extract study limitations)
-- Design limitations
-- Statistical power issues
-- Generalizability concerns
-```python
-class LimitationsAgent:
-    extract(text_chunks) -> {
-        'limitations': List[str]
-    }
-```
+#### 2.7 Testing Strategy
 
-#### 2.3 Implement Parallel Execution
-Create orchestrator:
-```python
-class TrialExtractionOrchestrator:
-    """Run all agents in parallel, merge results"""
+**Test on 5 cardiovascular trials:**
+- [ ] Drug trial (e.g., semaglutide, GLP-1 agonist)
+- [ ] Device trial (e.g., stent, pacemaker)
+- [ ] Behavioral trial (e.g., exercise, diet)
+- [ ] Observational study (cohort)
+- [ ] Mix of different outcome types (mortality, MACE, HF, etc.)
 
-    async def extract_all(pdf_path: str) -> StructuredTrial:
-        # Ingest PDF once
-        chunks = pdf_ingest.pipeline_pdf_to_chunks(pdf_path)
+**Validation:**
+- Extract from each paper
+- Compare to publisher's abstract
+- Check accuracy of:
+  - Study design type (RCT vs observational)
+  - Population numbers
+  - Main finding/numbers
+  - Study type classification
 
-        # Run 5 agents in parallel
-        metadata = await MetadataAgent.extract(chunks)
-        background = await BackgroundAgent.extract(chunks)
-        design = await StudyDesignAgent.extract(chunks)
-        results = await ResultsAgent.extract(chunks)
-        limitations = await LimitationsAgent.extract(chunks)
+**Success Criteria:**
+- [ ] All 5 papers extract without errors
+- [ ] >90% accuracy on key fields (n, main result, study type)
+- [ ] <10 minute extraction time per paper (with parallel summaries)
 
-        # Merge all outputs
-        return StructuredTrial(
-            metadata=metadata,
-            background=background,
-            design=design,
-            results=results,
-            limitations=limitations
-        )
-```
+#### 2.8 Key Design Decisions
 
-Or use `asyncio`/`concurrent.futures` for true parallelism with OpenAI batch calls.
+| Decision | Choice | Why |
+|----------|--------|-----|
+| **Use CrewAI?** | No (for now) | Avoid overengineering, keep it simple |
+| **Show agent debates?** | No | User just sees clean results + sidebar editing |
+| **Manual override?** | Yes | Phase 1 visual abstract sidebar (no changes) |
+| **Validation method?** | Fact-checker only | Simple numeric validation, no LLM |
+| **Parallel execution?** | concurrent.futures | Simpler than asyncio, good enough |
+| **Number extraction** | As-is | Extract numbers, validate ranges only |
+| **UI changes** | None | Keep Phase 1 exact, just better data |
 
-#### 2.4 Update `app.py` Integration
-- Replace "Extract PICOT" tab with "Extract Trial Info"
-- Show results as structured data card
-- Map extracted data to `VisualAbstractContent` automatically
+**Future Upgrade Path:** See `PHASE_2_AGENT_STRATEGY_REFERENCE.md` for CrewAI + full validation option
 
-**Files to Create/Modify:**
-- Create `/agents/metadata_agent.py`
-- Create `/agents/background_agent.py`
-- Create `/agents/design_agent.py`
-- Create `/agents/results_agent.py`
-- Create `/agents/limitations_agent.py`
-- Create `/agents/extraction_orchestrator.py` (orchestrator)
-- Refactor `/agents/extraction_agent.py` (old) - keep for now, deprecate later
-- Modify `/app.py` (integrate orchestrator)
+#### 2.9 Not In Scope (Avoid Overengineering)
 
-**Deliverable:** Flexible agent system that works on any trial, parallel execution
+- ❌ CrewAI integration
+- ❌ Agent confidence scores
+- ❌ Multiple extraction attempts with voting
+- ❌ Fine-tuned models
+- ❌ Database persistence
+- ❌ Export to formats other than UI editing
+- ❌ Advanced chunking (Phase 3 task)
+
+**Deliverable:** Robust extraction pipeline that works on any cardiovascular trial, with iterative summaries for quality, simple validation, and seamless integration with Phase 1 UI
 
 ---
 

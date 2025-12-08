@@ -10,7 +10,7 @@ try:
     import config
     from core.qa import QASystem
     from core.visual_abstract import VisualAbstractGenerator
-    from agents.extraction_agent import EvidenceExtractorAgent
+    from agents.phase2_orchestrator import Phase2Orchestrator
     from utils.visual_abstract_html import (
         VisualAbstractContent,
         render_visual_abstract,
@@ -76,11 +76,22 @@ with tab1:
                     try:
                         # Initialize QA system and ingest PDF
                         qa_system = QASystem(pdf_path=temp_pdf_path, model=model_choice)
-                        # Run full evidence extraction for structured outputs
-                        extractor = EvidenceExtractorAgent(model=model_choice)
-                        extraction_result = extractor.run_full_extraction(temp_pdf_path)
+
+                        # Run Phase 2 orchestrator for structured extraction
+                        st.info("🧠 Stage 1: Generating paper overview (10 parallel summaries)...")
+                        orchestrator = Phase2Orchestrator(model=model_choice)
+                        extraction_result = orchestrator.extract_all(temp_pdf_path)
 
                         st.success("✅ PDF processed and analyzed successfully!")
+
+                        # Show extraction summary
+                        col_summary1, col_summary2, col_summary3 = st.columns(3)
+                        with col_summary1:
+                            st.metric("Title", extraction_result.get("metadata", {}).get("title", "N/A")[:50] + "...")
+                        with col_summary2:
+                            st.metric("Population", extraction_result.get("design", {}).get("population_size", "N/A"))
+                        with col_summary3:
+                            st.metric("Validation Issues", len(extraction_result.get("validation_issues", [])))
 
                         # Store in session state for next tabs
                         st.session_state.qa_system = qa_system
@@ -164,30 +175,48 @@ with tab3:
         st.info("ℹ️ The PDF was not analyzed yet. Please re-run extraction in the first tab.")
     else:
         extraction = st.session_state.get("extraction_result", {})
-        structured = extraction.get("structured_abstract", {})
-        visual_data = extraction.get("visual_data", {})
 
         st.success(f"✅ Paper loaded: {st.session_state.pdf_name}")
 
-        # Map extraction data to VisualAbstractContent
+        # Map Phase 2 extraction data to VisualAbstractContent
+        metadata = extraction.get("metadata", {})
+        background = extraction.get("background", {})
+        design = extraction.get("design", {})
+        results = extraction.get("results", {})
+        limitations = extraction.get("limitations", {})
+        validation_issues = extraction.get("validation_issues", [])
+
+        # Build key results list
+        key_results = []
+        if results.get("main_finding"):
+            key_results.append(results.get("main_finding"))
+        if results.get("key_results"):
+            key_results.extend(results.get("key_results", [])[:2])
+
         abstract_content = {
-            "title": structured.get("title", "Clinical Trial Abstract"),
-            "main_finding": structured.get("main_finding", structured.get("results", "Key findings from the trial")),
-            "background": structured.get("background", ""),
-            "methods_summary": structured.get("methods_summary", "Study Design"),
-            "methods_description": structured.get("methods", ""),
-            "participants": str(visual_data.get("population", {}).get("total_enrolled", "N/A")),
+            "title": metadata.get("title", "Clinical Trial Abstract"),
+            "main_finding": results.get("main_finding", "Key findings from the trial"),
+            "background": background.get("background", ""),
+            "methods_summary": design.get("intervention", "Study Design"),
+            "methods_description": f"Population: {design.get('population_size', 'N/A')} | Intervention: {design.get('intervention', '')} | Comparator: {design.get('comparator', '')}",
+            "participants": str(design.get("population_size", "N/A")),
             "participants_label": "Participants enrolled",
-            "intervention": visual_data.get("population", {}).get("arm_1_label", "Intervention"),
-            "intervention_label": "vs. Comparator",
-            "results": [structured.get("results", "Primary outcome achieved")] if structured.get("results") else [],
+            "intervention": design.get("intervention", "Intervention"),
+            "intervention_label": f"vs. {design.get('comparator', 'Comparator')}",
+            "results": key_results,
             "chart_title": "Key Results",
             "chart_subtitle": "",
-            "journal": structured.get("journal", ""),
-            "year": structured.get("year", ""),
-            "authors": structured.get("authors", ""),
-            "doi": structured.get("doi", ""),
+            "journal": metadata.get("journal", ""),
+            "year": str(metadata.get("year", "")),
+            "authors": ", ".join(metadata.get("authors", [])) if isinstance(metadata.get("authors"), list) else metadata.get("authors", ""),
+            "doi": metadata.get("doi", ""),
         }
+
+        # Show validation status if there are issues
+        if validation_issues:
+            st.warning(f"⚠️ {len(validation_issues)} validation issue(s) found during extraction:")
+            for issue in validation_issues:
+                st.caption(f"  • {issue}")
 
         # Create editable abstract in sidebar
         edited_content = render_editable_abstract(abstract_content)
