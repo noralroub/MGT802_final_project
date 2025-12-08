@@ -92,20 +92,23 @@ class Phase2Orchestrator:
             Comprehensive paper overview (string)
         """
         # Ingest PDF and create chunks
-        chunks = pipeline_pdf_to_chunks(pdf_path)
+        ingest_result = pipeline_pdf_to_chunks(pdf_path)
+        chunks = ingest_result.get("chunks", [])
 
-        # Split into 10 chunks (10% each)
+        if not chunks:
+            logger.warning("No chunks found in PDF")
+            return "Paper overview: Unable to generate overview from empty chunks."
+
+        # Split into 10 chunks (10% each) - select evenly spaced chunks
         chunk_size = max(1, len(chunks) // 10)
-        summary_chunks = chunks[: 10 * chunk_size : chunk_size]
+        summary_chunks = [chunks[i] for i in range(0, min(len(chunks), 10 * chunk_size), chunk_size)][:10]
 
-        # Ensure we have at most 10 chunks
-        summary_chunks = summary_chunks[:10]
+        # If we have fewer than 10 chunks, use all of them
+        if len(summary_chunks) == 0:
+            summary_chunks = chunks[:10]
 
-        # Combine into text for summary (10% of full text)
-        chunk_texts = [
-            '\n\n'.join(summary_chunks[i * chunk_size : (i + 1) * chunk_size])
-            for i in range(min(10, len(summary_chunks)))
-        ]
+        # Use chunks as-is for summary agents (each chunk is already text)
+        chunk_texts = summary_chunks
 
         # Run summary agents in parallel
         summaries = []
@@ -145,8 +148,8 @@ class Phase2Orchestrator:
             Dict with all extracted information
         """
         # Extract sections from PDF
-        text = pipeline_pdf_to_chunks(pdf_path)
-        full_text = '\n\n'.join(text)
+        ingest_result = pipeline_pdf_to_chunks(pdf_path)
+        full_text = ingest_result.get("raw_text", "")
 
         # Detect sections
         sections = detect_sections(full_text)
