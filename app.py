@@ -11,6 +11,12 @@ try:
     from core.qa import QASystem
     from core.visual_abstract import VisualAbstractGenerator
     from agents.extraction_agent import EvidenceExtractorAgent
+    from utils.visual_abstract_html import (
+        VisualAbstractContent,
+        render_visual_abstract,
+        render_editable_abstract,
+        safe_get
+    )
     # Ensure config loads properly
     _ = config.OPENAI_API_KEY
 except Exception as e:
@@ -150,7 +156,7 @@ with tab2:
 
 with tab3:
     st.header("Generate Visual Abstract")
-    st.write("Create an infographic-style summary of the clinical trial data.")
+    st.write("Create a professional, publication-ready visual abstract.")
 
     if "pdf_processed" not in st.session_state or not st.session_state.pdf_processed:
         st.warning("⚠️ Please upload and process a PDF first using the 'Upload & Extract' tab.")
@@ -163,62 +169,49 @@ with tab3:
 
         st.success(f"✅ Paper loaded: {st.session_state.pdf_name}")
 
-        with st.expander("View Structured Abstract", expanded=True):
-            col_a, col_b = st.columns(2)
-            with col_a:
-                st.subheader("Background")
-                st.write(structured.get("background", ""))
-                st.subheader("Methods")
-                st.write(structured.get("methods", ""))
-            with col_b:
-                st.subheader("Results")
-                st.write(structured.get("results", ""))
-                st.subheader("Conclusions")
-                st.write(structured.get("conclusions", ""))
+        # Map extraction data to VisualAbstractContent
+        abstract_content = {
+            "title": structured.get("title", "Clinical Trial Abstract"),
+            "main_finding": structured.get("main_finding", structured.get("results", "Key findings from the trial")),
+            "background": structured.get("background", ""),
+            "methods_summary": structured.get("methods_summary", "Study Design"),
+            "methods_description": structured.get("methods", ""),
+            "participants": str(visual_data.get("population", {}).get("total_enrolled", "N/A")),
+            "participants_label": "Participants enrolled",
+            "intervention": visual_data.get("population", {}).get("arm_1_label", "Intervention"),
+            "intervention_label": "vs. Comparator",
+            "results": [structured.get("results", "Primary outcome achieved")] if structured.get("results") else [],
+            "chart_title": "Key Results",
+            "chart_subtitle": "",
+            "journal": structured.get("journal", ""),
+            "year": structured.get("year", ""),
+            "authors": structured.get("authors", ""),
+            "doi": structured.get("doi", ""),
+        }
+
+        # Create editable abstract in sidebar
+        edited_content = render_editable_abstract(abstract_content)
 
         st.divider()
 
-        col1, col2 = st.columns(2)
+        col1, col2 = st.columns([3, 1])
 
         with col1:
-            st.subheader("Layout Options")
-            layout_type = st.selectbox(
-                "Select layout style:",
-                options=["horizontal_3panel", "vertical_stacked"],
-                help="Choose how to arrange the visual abstract"
-            )
+            st.subheader("Professional Visual Abstract")
 
         with col2:
-            st.write("")  # Spacing
-
-        if st.button("🎨 Generate Visual Abstract", key="visual_abstract_btn"):
-            with st.spinner("Generating visual abstract... This may take a moment."):
+            # Export options
+            if st.button("📥 Download PNG"):
                 try:
-                    generator = VisualAbstractGenerator(
-                        layout_type=layout_type,
-                        trial_data=visual_data
-                    )
-                    generator.generate_abstract()
-
-                    # Get image as bytes
-                    image_bytes = generator.export_as_bytes()
-
-                    st.success("✅ Visual abstract generated successfully!")
-
-                    # Display image
-                    st.image(image_bytes, use_column_width=True)
-
-                    # Download button
-                    st.download_button(
-                        label="📥 Download Visual Abstract",
-                        data=image_bytes,
-                        file_name=f"visual_abstract_{Path(st.session_state.pdf_name).stem}.png",
-                        mime="image/png"
-                    )
-
+                    from utils.visual_abstract_html import build_visual_abstract_html
+                    html_content = build_visual_abstract_html(edited_content)
+                    # Note: PNG export requires Playwright/Selenium (see optional export feature)
+                    st.info("💡 Full PNG export requires additional setup. HTML preview shown above.")
                 except Exception as e:
-                    st.error(f"Error generating visual abstract: {str(e)}")
-                    logger.error(f"Visual abstract generation error: {str(e)}")
+                    st.error(f"Export error: {str(e)}")
+
+        # Render the HTML visual abstract
+        render_visual_abstract(edited_content, height=900)
 
 # Footer
 st.markdown("---")
