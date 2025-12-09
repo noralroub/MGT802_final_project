@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class BackgroundAgent:
-    """Extracts background information and research question.
+    """Extracts a NEJM/JACC-style trial positioning sentence plus research question.
 
     Extracts: background, research_question
     Uses: Introduction section + Paper overview
@@ -42,24 +42,26 @@ class BackgroundAgent:
         if not intro_text or len(intro_text.strip()) < 50:
             return self._empty_result()
 
-        prompt = f"""Extract background information and research question from this paper section.
+        prompt = f"""You are a medical journal editor. From the content below, generate:
 
-Introduction Section:
+1. background: ONE single sentence that starts with "The first..." and mirrors NEJM/JACC
+   positioning blurbs. It must:
+   - specify study design elements (randomized, double-blind, head-to-head, etc.)
+   - mention intervention and comparator, including drug class or delivery if relevant
+   - name the target disease/population and risk profile
+   - articulate the unmet clinical problem or rationale
+   - stay factual, 25-40 words, no statistics, no outcomes, no extra commentary
+2. research_question: 1-2 sentences that clearly capture the clinical hypothesis being tested.
+
+INTRODUCTION:
 {intro_text[:1500]}
 
-Paper Overview:
+PAPER OVERVIEW:
 {paper_overview[:1000]}
 
-Extract:
-1. background: A 2-4 sentence summary of the clinical context and why this study was needed.
-   Include disease/condition, current knowledge gaps, and clinical significance.
-2. research_question: The main question or hypothesis the study addresses (1-2 sentences).
-
-Keep both clear and concise. Focus on what makes this study important.
-
-Respond in JSON:
+Respond in JSON only:
 {{
-    "background": "2-4 sentence background...",
+    "background": "The first...",
     "research_question": "The main research question..."
 }}"""
 
