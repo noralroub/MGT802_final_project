@@ -44,10 +44,21 @@ class FactChecker:
 
         return extracted_data, self.issues
 
+    def _extract_value(self, field: Any) -> Any:
+        """Get raw value from ReAct-style field dicts."""
+        if isinstance(field, dict):
+            return field.get("value")
+        return field
+
     def _check_population_size(self, data: Dict[str, Any]) -> None:
         """Check population size is realistic."""
         design = data.get('design', {})
-        pop_size = design.get('population_size')
+        pop_size = self._extract_value(design.get('population_size'))
+        if isinstance(pop_size, str):
+            try:
+                pop_size = int(pop_size.replace(",", "").strip())
+            except ValueError:
+                pop_size = None
 
         if pop_size is not None:
             if pop_size <= 0:
@@ -58,7 +69,7 @@ class FactChecker:
     def _check_results_data(self, data: Dict[str, Any]) -> None:
         """Check results data for obvious errors."""
         results = data.get('results', {})
-        main_finding = results.get('main_finding', '')
+        main_finding = self._extract_value(results.get('main_finding', ''))
 
         # Extract numbers from main finding and validate
         if main_finding:
