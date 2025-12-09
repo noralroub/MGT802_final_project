@@ -35,12 +35,18 @@ class RAGPipeline:
         try:
             logger.info(f"Ingesting PDF: {pdf_path}")
 
+            # Clear previous data to avoid mixing papers
+            self.vector_store.clear_collection()
+            logger.info("Cleared previous vector store data")
+
             # Parse PDF into chunks
             result = pipeline_pdf_to_chunks(pdf_path)
             self.chunks = result["chunks"]
 
-            # Generate chunk IDs
-            chunk_ids = [f"chunk_{i}" for i in range(len(self.chunks))]
+            # Generate unique chunk IDs with PDF path hash to avoid collisions
+            import hashlib
+            pdf_hash = hashlib.md5(pdf_path.encode()).hexdigest()[:8]
+            chunk_ids = [f"chunk_{pdf_hash}_{i}" for i in range(len(self.chunks))]
 
             # Add to vector store
             self.vector_store.add_chunks(self.chunks, chunk_ids)
