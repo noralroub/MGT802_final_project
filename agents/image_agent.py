@@ -80,18 +80,13 @@ class ImageLibraryAgent:
 
         return [
             asset(
-                "cardiac_headtohead.png",
-                "Comparative cardiac therapy focus",
-                ["cardiac", "myocardial", "heart", "beta-blocker", "hcm", "aficamten"]
+                "anatomical-heart-svgrepo-com.svg",
+                "Cardiac / hemodynamic focus",
+                ["cardiac", "heart", "myocardial", "hcm", "angiography", "ischemic", "heart failure", "cardiomyopathy"]
             ),
             asset(
-                "metabolic_obesity.png",
-                "Metabolic and cardiometabolic intervention focus",
-                ["semaglutide", "obesity", "weight", "glp-1", "metabolic", "diabetes"]
-            ),
-            asset(
-                "default_placeholder.png",
-                "Clinical trial visual",
-                []
+                "obesity.svg",
+                "Metabolic or obesity-focused intervention",
+                ["obesity", "weight", "semaglutide", "glp-1", "metabolic", "diabetes", "bmi"]
             )
         ]
