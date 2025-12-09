@@ -8,12 +8,16 @@ Author: Medical Visual Abstract System
 """
 
 import base64
+import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 
 import streamlit as st
 import streamlit.components.v1 as components
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -228,6 +232,26 @@ def load_image_data_uri(path: str) -> str:
         return f"data:{mime};base64,{encoded}"
     except OSError:
         return ""
+
+
+def html_to_png_bytes(html: str) -> Tuple[Optional[bytes], Optional[str]]:
+    """Convert HTML content into PNG bytes using Playwright."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return None, "playwright package is not installed. Install it with: pip install playwright"
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 900, "height": 1200})
+            page.set_content(html)
+            png_bytes = page.screenshot(type="png", full_page=True)
+            browser.close()
+            return png_bytes, None
+    except Exception as e:
+        logger.error("PNG generation failed: %s", e)
+        return None, str(e)
 
 
 # =============================================================================

@@ -13,9 +13,10 @@ try:
     from agents.phase2_orchestrator import Phase2Orchestrator
     from utils.visual_abstract_html import (
         VisualAbstractContent,
-        render_visual_abstract,
         render_editable_abstract,
-        safe_get
+        safe_get,
+        build_visual_abstract_html,
+        html_to_png_bytes
     )
     # Ensure config loads properly
     _ = config.OPENAI_API_KEY
@@ -235,18 +236,32 @@ with tab3:
             st.subheader("Professional Visual Abstract")
 
         with col2:
-            # Export options
-            if st.button("📥 Download PNG"):
-                try:
-                    from utils.visual_abstract_html import build_visual_abstract_html
-                    html_content = build_visual_abstract_html(edited_content)
-                    # Note: PNG export requires Playwright/Selenium (see optional export feature)
-                    st.info("💡 Full PNG export requires additional setup. HTML preview shown above.")
-                except Exception as e:
-                    st.error(f"Export error: {str(e)}")
+            try:
+                html_content = build_visual_abstract_html(edited_content)
+            except Exception as e:
+                st.error(f"Export error: {str(e)}")
+                html_content = None
 
-        # Render the HTML visual abstract
-        render_visual_abstract(edited_content, height=900)
+            if html_content:
+                st.download_button(
+                    label="📥 Download HTML",
+                    data=html_content,
+                    file_name="visual_abstract.html",
+                    mime="text/html",
+                    use_container_width=True
+                )
+
+                png_bytes, png_error = html_to_png_bytes(html_content)
+                if png_bytes:
+                    st.download_button(
+                        label="🖼️ Download PNG",
+                        data=png_bytes,
+                        file_name="visual_abstract.png",
+                        mime="image/png",
+                        use_container_width=True
+                    )
+                else:
+                    st.caption("PNG export unavailable: " + (png_error or "wkhtmltoimage dependency missing."))
 
 # Footer
 st.markdown("---")
