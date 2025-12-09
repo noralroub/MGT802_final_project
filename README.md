@@ -108,3 +108,13 @@ ___________________________________________________
 - Install dependencies: `pip install -r requirements.txt`.
 - Ensure `data/chroma_db/` exists (Chroma will initialize it on first run).
 - Run the Streamlit app: `streamlit run app.py`.
+
+## Docs and History
+- Current guides: `QUICK_START.md` (run it fast) and `PHASE_2_TESTING_GUIDE.md` (detailed testing).
+- Historical sprint notes live in `docs/archive/SPRINT_*` (kept for reference).
+
+## Changelog (high level)
+- Sprint 1: Validated PDF parsing and chunking on clinical trials.
+- Sprint 2: Added embeddings, Chroma vector store, and retrieval.
+- Sprint 3: Integrated LLM answer generation on top of RAG.
+- Sprint 4: Built visual abstract generation components and UI.
