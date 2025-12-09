@@ -29,6 +29,16 @@ except Exception as e:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def _save_uploaded_pdf(uploaded_file) -> str:
+    """Persist uploaded PDF to a temporary file and return the path."""
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+        tmp_file.write(uploaded_file.getbuffer())
+        temp_pdf_path = tmp_file.name
+
+    logger.debug("Saved uploaded PDF to %s", temp_pdf_path)
+    return temp_pdf_path
+
 st.set_page_config(page_title="Medical Visual Abstract Generator", layout="wide")
 
 st.title("🏥 Medical Visual Abstract Generator")
@@ -56,11 +66,6 @@ with tab1:
     )
 
     if uploaded_file is not None:
-        # Save uploaded file temporarily
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-            tmp_file.write(uploaded_file.getbuffer())
-            temp_pdf_path = tmp_file.name
-
         st.success(f"File uploaded: {uploaded_file.name}")
 
         col1, col2 = st.columns(2)
@@ -74,7 +79,10 @@ with tab1:
             st.subheader("Processing Options")
             if st.button("🔄 Extract & Analyze Paper", key="extract_btn"):
                 with st.spinner("Processing PDF... This may take a minute."):
+                    temp_pdf_path = None
                     try:
+                        temp_pdf_path = _save_uploaded_pdf(uploaded_file)
+
                         # Initialize QA system and ingest PDF
                         qa_system = QASystem(pdf_path=temp_pdf_path, model=model_choice)
 
@@ -106,6 +114,13 @@ with tab1:
                     except Exception as e:
                         st.error(f"Error processing PDF: {str(e)}")
                         logger.error(f"PDF processing error: {str(e)}")
+                    finally:
+                        if temp_pdf_path and os.path.exists(temp_pdf_path):
+                            try:
+                                os.unlink(temp_pdf_path)
+                                logger.debug("Removed temporary PDF %s", temp_pdf_path)
+                            except OSError as cleanup_error:
+                                logger.warning("Failed to clean up temp file %s: %s", temp_pdf_path, cleanup_error)
 
 with tab2:
     st.header("Question & Answer System")
