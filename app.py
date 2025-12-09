@@ -193,7 +193,9 @@ with tab3:
         if results.get("main_finding"):
             key_results.append(results.get("main_finding"))
         if results.get("key_results"):
-            key_results.extend(results.get("key_results", [])[:2])
+            key_results.extend(results.get("key_results", [])[:3])
+
+        visual_asset = extraction.get("visual_asset", {})
 
         abstract_content = {
             "title": metadata.get("title", "Clinical Trial Abstract"),
@@ -206,6 +208,8 @@ with tab3:
             "intervention": design.get("intervention", "Intervention"),
             "intervention_label": f"vs. {design.get('comparator', 'Comparator')}",
             "results": key_results,
+            "visual_asset_path": visual_asset.get("image_path", ""),
+            "visual_asset_caption": visual_asset.get("caption", ""),
             "chart_title": "Key Results",
             "chart_subtitle": "",
             "journal": metadata.get("journal", ""),

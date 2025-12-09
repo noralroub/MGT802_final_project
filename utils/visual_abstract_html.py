@@ -7,11 +7,13 @@ that matches modern journal publication standards.
 Author: Medical Visual Abstract System
 """
 
+import base64
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional, Dict, Any
+
 import streamlit as st
 import streamlit.components.v1 as components
-from typing import Optional, Dict, Any
-from dataclasses import dataclass
-import json
 
 
 # =============================================================================
@@ -48,6 +50,10 @@ class VisualAbstractContent:
     # Results Section
     results: list = None  # List of result strings
 
+    # Visual Asset
+    visual_asset_path: str = ""
+    visual_asset_caption: str = "Clinical illustration summary"
+
     # Chart
     chart_title: str = "Visual Summary"
     chart_subtitle: str = ""
@@ -76,6 +82,8 @@ class VisualAbstractContent:
             'intervention': self.intervention,
             'intervention_label': self.intervention_label,
             'results': self.results,
+            'visual_asset_path': self.visual_asset_path,
+            'visual_asset_caption': self.visual_asset_caption,
             'chart_title': self.chart_title,
             'chart_subtitle': self.chart_subtitle,
             'chart_data': self.chart_data,
@@ -198,6 +206,30 @@ def safe_get(data: dict, key: str, default: Any = "") -> Any:
     return default if value is None else value
 
 
+def load_image_data_uri(path: str) -> str:
+    """Convert a local image file to a data URI for HTML embedding."""
+    if not path:
+        return ""
+
+    file_path = Path(path)
+    if not file_path.exists() or not file_path.is_file():
+        return ""
+
+    suffix = file_path.suffix.lower()
+    if suffix in (".jpg", ".jpeg"):
+        mime = "image/jpeg"
+    elif suffix == ".svg":
+        mime = "image/svg+xml"
+    else:
+        mime = "image/png"
+
+    try:
+        encoded = base64.b64encode(file_path.read_bytes()).decode("utf-8")
+        return f"data:{mime};base64,{encoded}"
+    except OSError:
+        return ""
+
+
 # =============================================================================
 # HTML BUILDER
 # =============================================================================
@@ -224,9 +256,8 @@ def build_visual_abstract_html(content: Dict[str, Any]) -> str:
     intervention_label = safe_get(content, "intervention_label", "Intervention type")
     methods_description = safe_get(content, "methods_description", "Methods description goes here...")
     results = safe_get(content, "results", ["Result 1", "Result 2", "Result 3"])
-    chart_title = safe_get(content, "chart_title", "Visual Summary")
-    chart_subtitle = safe_get(content, "chart_subtitle", "")
-    chart_data = safe_get(content, "chart_data", None)
+    visual_asset_path = safe_get(content, "visual_asset_path", "")
+    visual_asset_caption = safe_get(content, "visual_asset_caption", "Clinical trial illustration")
     journal = safe_get(content, "journal", "[Journal Name]")
     year = safe_get(content, "year", "[Year]")
     authors = safe_get(content, "authors", "[Authors]")
@@ -235,16 +266,14 @@ def build_visual_abstract_html(content: Dict[str, Any]) -> str:
     # Build results list HTML
     results_html = "".join([f"<li>{r}</li>" for r in results if r])
 
-    # Build chart content
-    if chart_data:
-        chart_content = render_bar_chart(chart_data)
+    image_data_uri = load_image_data_uri(visual_asset_path)
+    if image_data_uri:
+        image_block = f'<img src="{image_data_uri}" alt="Clinical illustration" class="va-clinical-image" />'
     else:
-        chart_content = f'''
-            <div style="width:80px;height:80px;margin:0 auto;">
+        image_block = f'''
+            <div class="va-image-placeholder">
                 {get_chart_placeholder_icon()}
-            </div>
-            <div style="font-size:0.8rem;color:#666;margin-top:8px;">
-                Chart or relevant visual
+                <div class="va-placeholder-copy">Select an internal library visual</div>
             </div>
         '''
 
@@ -430,62 +459,50 @@ def build_visual_abstract_html(content: Dict[str, Any]) -> str:
                 margin-bottom: 6px;
             }}
 
-            /* Chart box */
-            .va-chart-box {{
+            /* Visual block */
+            .va-visual-box {{
                 background: {COLORS['white']};
                 border: 2px solid {COLORS['box_border']};
                 border-radius: 4px;
                 padding: 16px;
                 text-align: center;
             }}
-            .va-chart-title {{
+            .va-visual-title {{
                 font-size: 1rem;
                 font-weight: 700;
                 color: {COLORS['results_header']};
                 margin-bottom: 4px;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
             }}
-            .va-chart-subtitle {{
+            .va-visual-subtitle {{
+                padding: 16px;
                 font-size: 0.85rem;
                 color: {COLORS['text_secondary']};
-                margin-bottom: 16px;
             }}
-            .va-chart-area {{
-                min-height: 120px;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
+            .va-clinical-image {{
+                width: 100%;
+                max-height: 260px;
+                object-fit: cover;
+                border-radius: 4px;
+                border: 1px solid {COLORS['box_border']};
+                margin-bottom: 10px;
             }}
-
-            /* Bar chart */
-            .va-bar-chart {{
-                display: flex;
-                align-items: flex-end;
-                justify-content: center;
-                gap: 16px;
-                height: 100px;
-            }}
-            .va-bar-item {{
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-            }}
-            .va-bar {{
-                width: 40px;
-                background: {COLORS['hero_bg']};
-                border-radius: 4px 4px 0 0;
-                display: flex;
-                align-items: flex-start;
-                justify-content: center;
-                padding-top: 4px;
-                color: white;
-                font-weight: 700;
-                font-size: 0.75rem;
-            }}
-            .va-bar-label {{
-                font-size: 0.7rem;
+            .va-image-caption {{
+                font-size: 0.85rem;
                 color: {COLORS['text_secondary']};
-                margin-top: 4px;
+            }}
+            .va-image-placeholder {{
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                color: {COLORS['text_secondary']};
+            }}
+            .va-placeholder-copy {{
+                font-size: 0.85rem;
+                text-align: center;
             }}
 
             /* Footer */
@@ -565,7 +582,7 @@ def build_visual_abstract_html(content: Dict[str, Any]) -> str:
                 <div class="va-right-column">
                     <!-- Results Box -->
                     <div class="va-results-box">
-                        <div class="va-results-header">Results</div>
+                        <div class="va-results-header">Key Results</div>
                         <div class="va-results-content">
                             <div class="va-results-intro">Key findings:</div>
                             <ol class="va-results-list">
@@ -574,13 +591,11 @@ def build_visual_abstract_html(content: Dict[str, Any]) -> str:
                         </div>
                     </div>
 
-                    <!-- Chart Area -->
-                    <div class="va-chart-box">
-                        <div class="va-chart-title">{chart_title}</div>
-                        <div class="va-chart-subtitle">{chart_subtitle}</div>
-                        <div class="va-chart-area">
-                            {chart_content}
-                        </div>
+                    <!-- Visual Block -->
+                    <div class="va-visual-box">
+                        <div class="va-visual-title">Clinical Visual</div>
+                        <div class="va-visual-subtitle">{visual_asset_caption}</div>
+                        {image_block}
                     </div>
                 </div>
             </div>
@@ -696,6 +711,24 @@ def render_editable_abstract(initial_content: Optional[Dict[str, Any]] = None) -
         )
         edited["results"] = [r.strip() for r in results_text.split("\n") if r.strip()]
 
+        st.subheader("Clinical Visual")
+        edited["visual_asset_path"] = st.text_input(
+            "Image Path",
+            value=safe_get(initial_content, "visual_asset_path", ""),
+            help="Point to a PNG/JPG stored in assets/image_library"
+        )
+        asset_path = Path(edited["visual_asset_path"])
+        if edited["visual_asset_path"]:
+            if asset_path.exists():
+                st.caption(f"✅ Found {asset_path}")
+            else:
+                st.caption("⚠️ File not found. Confirm the path inside assets/image_library.")
+
+        edited["visual_asset_caption"] = st.text_input(
+            "Image Caption",
+            value=safe_get(initial_content, "visual_asset_caption", ""),
+        )
+
         st.subheader("Chart")
         edited["chart_title"] = st.text_input(
             "Chart Title",
@@ -729,6 +762,7 @@ def render_editable_abstract(initial_content: Optional[Dict[str, Any]] = None) -
 
         # Preserve chart data
         edited["chart_data"] = safe_get(initial_content, "chart_data", None)
+        edited["results"] = edited.get("results", safe_get(initial_content, "results", []))
 
     # Render the abstract
     render_visual_abstract(edited)

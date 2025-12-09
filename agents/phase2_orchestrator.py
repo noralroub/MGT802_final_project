@@ -19,6 +19,7 @@ from agents.design_agent import DesignAgent
 from agents.results_agent import ResultsAgent
 from agents.limitations_agent import LimitationsAgent
 from agents.fact_checker import FactChecker
+from agents.image_agent import ImageLibraryAgent
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,7 @@ class Phase2Orchestrator:
         self.results_agent = ResultsAgent(model=model)
         self.limitations_agent = LimitationsAgent(model=model)
         self.fact_checker = FactChecker()
+        self.image_agent = ImageLibraryAgent()
 
     def extract_all(self, pdf_path: str) -> Dict[str, Any]:
         """Run full extraction pipeline on a PDF.
@@ -261,5 +263,16 @@ class Phase2Orchestrator:
             except Exception as e:
                 logger.error(f"Error in limitations extraction: {e}")
                 extracted['limitations'] = {}
+
+        try:
+            extracted['visual_asset'] = self.image_agent.extract(
+                extracted.get('metadata', {}),
+                extracted.get('background', {}),
+                extracted.get('design', {}),
+                extracted.get('results', {})
+            )
+        except Exception as e:
+            logger.error(f"Error in image selection: {e}")
+            extracted['visual_asset'] = {}
 
         return extracted
