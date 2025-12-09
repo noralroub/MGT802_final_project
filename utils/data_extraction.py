@@ -3,10 +3,104 @@
 import logging
 import re
 import json
+from dataclasses import dataclass, asdict, field
 from typing import Dict, Any, Optional, List
 
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class PopulationData:
+    """Structured representation for study population data."""
+
+    total_enrolled: int = 0
+    drug_arm: int = 0
+    placebo_arm: int = 0
+    age_mean: Optional[float] = None
+    bmi_minimum: Optional[float] = None
+
+    def to_dict(self) -> Dict[str, Optional[float]]:
+        """Return a serializable dictionary."""
+        return asdict(self)
+
+
+@dataclass
+class OutcomeData:
+    """Primary outcome metrics."""
+
+    definition: str = ""
+    hazard_ratio: Optional[float] = None
+    ci_lower: Optional[float] = None
+    ci_upper: Optional[float] = None
+    p_value: Optional[str] = None
+    semaglutide_rate: Optional[float] = None
+    placebo_rate: Optional[float] = None
+
+    def to_dict(self) -> Dict[str, Optional[float]]:
+        return asdict(self)
+
+
+@dataclass
+class EventPair:
+    """Helper structure for paired percentages (drug vs placebo)."""
+
+    drug: Optional[float] = None
+    placebo: Optional[float] = None
+
+
+@dataclass
+class AdverseEventRates:
+    """Collection of adverse-event statistics."""
+
+    discontinuation: EventPair = field(default_factory=EventPair)
+    gastrointestinal: EventPair = field(default_factory=EventPair)
+    serious_adverse: EventPair = field(default_factory=EventPair)
+
+    def to_dict(self) -> Dict[str, Dict[str, Optional[float]]]:
+        return {
+            'discontinuation': asdict(self.discontinuation),
+            'gastrointestinal': asdict(self.gastrointestinal),
+            'serious_adverse': asdict(self.serious_adverse),
+        }
+
+
+@dataclass
+class DosingData:
+    """Structured dosing summary."""
+
+    dose: Optional[str] = None
+    frequency: Optional[str] = None
+    at_target_percent: Optional[float] = None
+
+    def to_dict(self) -> Dict[str, Optional[float]]:
+        return asdict(self)
+
+
+@dataclass
+class BodyWeightData:
+    """Body weight change summary."""
+
+    semaglutide_change: Optional[float] = None
+    placebo_change: Optional[float] = None
+    difference: Optional[float] = None
+
+    def to_dict(self) -> Dict[str, Optional[float]]:
+        return asdict(self)
+
+
+@dataclass
+class TrialInfo:
+    """High-level metadata about the clinical trial."""
+
+    title: str = 'Clinical Trial Visual Abstract'
+    drug: str = 'Investigational Therapy'
+    indication: str = 'Indication not specified'
+    trial_name: str = 'Clinical Study'
+    publication: str = 'Publication not specified'
+
+    def to_dict(self) -> Dict[str, str]:
+        return asdict(self)
 
 
 class TrialDataExtractor:
@@ -128,7 +222,7 @@ class TrialDataExtractor:
             return text[start_idx:end_idx]
         return text[start_idx:]
 
-    def extract_demographics(self, qa_results: Dict) -> Dict[str, Any]:
+    def extract_demographics(self, qa_results: Dict[str, Any]) -> Dict[str, Any]:
         """Extract population/demographic information."""
         enrollment_answer = self._find_answer(qa_results, 'enrollment')
         inclusion_answer = self._find_answer(qa_results, 'inclusion')
@@ -153,17 +247,17 @@ class TrialDataExtractor:
             elif drug_arm_value is None:
                 drug_arm_value = count
 
-        demographics = {
-            'total_enrolled': int(total_enrolled) if total_enrolled is not None else 0,
-            'drug_arm': drug_arm_value if drug_arm_value is not None else int(drug_arm) if drug_arm is not None else 0,
-            'placebo_arm': placebo_arm_value if placebo_arm_value is not None else int(placebo_arm) if placebo_arm is not None else 0,
-            'age_mean': self.extract_number(inclusion_answer, self.patterns['age']) or 0,
-            'bmi_minimum': self.extract_number(inclusion_answer, self.patterns['bmi']) or 0,
-        }
+        demographics = PopulationData(
+            total_enrolled=int(total_enrolled) if total_enrolled is not None else 0,
+            drug_arm=drug_arm_value if drug_arm_value is not None else int(drug_arm) if drug_arm is not None else 0,
+            placebo_arm=placebo_arm_value if placebo_arm_value is not None else int(placebo_arm) if placebo_arm is not None else 0,
+            age_mean=self.extract_number(inclusion_answer, self.patterns['age']),
+            bmi_minimum=self.extract_number(inclusion_answer, self.patterns['bmi'])
+        )
 
-        return demographics
+        return demographics.to_dict()
 
-    def extract_outcomes(self, qa_results: Dict) -> Dict[str, Any]:
+    def extract_outcomes(self, qa_results: Dict[str, Any]) -> Dict[str, Any]:
         """Extract primary outcome information."""
         outcome_question_answer = self._find_answer(qa_results, 'primary_outcome')
         hazard_ratio_answer = self._find_answer(qa_results, 'hazard_ratio')
@@ -173,56 +267,56 @@ class TrialDataExtractor:
         p_match = re.search(r'p(?:\s*[=-]|\s*value)?\s*(<?\s*0?\.\d+)', hazard_ratio_answer, re.IGNORECASE)
         serious_ae_match = re.search(r'serious\s+adverse\s+events.*?(\d+(?:\.\d+)?)%.*?(\d+(?:\.\d+)?)%', comparison_answer, re.IGNORECASE)
 
-        outcomes = {
-            'definition': outcome_question_answer,
-            'hazard_ratio': float(hr_match.group(1)) if hr_match else None,
-            'ci_lower': float(hr_match.group(2)) if hr_match else None,
-            'ci_upper': float(hr_match.group(3)) if hr_match else None,
-            'p_value': p_match.group(1).replace(' ', '') if p_match else None,
-            'semaglutide_rate': float(serious_ae_match.group(1)) if serious_ae_match else None,
-            'placebo_rate': float(serious_ae_match.group(2)) if serious_ae_match else None,
-        }
+        outcomes = OutcomeData(
+            definition=outcome_question_answer,
+            hazard_ratio=float(hr_match.group(1)) if hr_match else None,
+            ci_lower=float(hr_match.group(2)) if hr_match else None,
+            ci_upper=float(hr_match.group(3)) if hr_match else None,
+            p_value=p_match.group(1).replace(' ', '') if p_match else None,
+            semaglutide_rate=float(serious_ae_match.group(1)) if serious_ae_match else None,
+            placebo_rate=float(serious_ae_match.group(2)) if serious_ae_match else None,
+        )
 
-        return outcomes
+        return outcomes.to_dict()
 
-    def extract_adverse_events(self, qa_results: Dict) -> Dict[str, Any]:
+    def extract_adverse_events(self, qa_results: Dict[str, Any]) -> Dict[str, Any]:
         """Extract adverse event information."""
         ae_answer = self._find_answer(qa_results, 'adverse_events')
         comparison_answer = self._find_answer(qa_results, 'comparison')
 
-        adverse_events = {
-            'discontinuation': {
-                'drug': self.extract_number(ae_answer, self.patterns['discontinuation_drug']),
-                'placebo': self.extract_number(ae_answer, self.patterns['discontinuation_placebo']),
-            },
-            'gastrointestinal': {
-                'drug': self.extract_number(ae_answer, self.patterns['gi_drug']),
-                'placebo': self.extract_number(ae_answer, self.patterns['gi_placebo']),
-            },
-            'serious_adverse': {
-                'drug': self.extract_number(comparison_answer, self.patterns['serious_adverse_drug']),
-                'placebo': self.extract_number(comparison_answer, self.patterns['serious_adverse_placebo']),
-            },
-        }
+        adverse_events = AdverseEventRates(
+            discontinuation=EventPair(
+                drug=self.extract_number(ae_answer, self.patterns['discontinuation_drug']),
+                placebo=self.extract_number(ae_answer, self.patterns['discontinuation_placebo'])
+            ),
+            gastrointestinal=EventPair(
+                drug=self.extract_number(ae_answer, self.patterns['gi_drug']),
+                placebo=self.extract_number(ae_answer, self.patterns['gi_placebo'])
+            ),
+            serious_adverse=EventPair(
+                drug=self.extract_number(comparison_answer, self.patterns['serious_adverse_drug']),
+                placebo=self.extract_number(comparison_answer, self.patterns['serious_adverse_placebo'])
+            ),
+        )
 
-        return adverse_events
+        return adverse_events.to_dict()
 
-    def extract_dosing(self, qa_results: Dict) -> Dict[str, Any]:
+    def extract_dosing(self, qa_results: Dict[str, Any]) -> Dict[str, Any]:
         """Extract dosing information."""
         dose_answer = self._find_answer(qa_results, 'dosing')
 
         dose_value = self.extract_number(dose_answer, self.patterns['dose'])
         frequency_match = re.search(self.patterns['frequency'], dose_answer or '', re.IGNORECASE)
 
-        dosing = {
-            'dose': f"{dose_value:.1f} mg" if dose_value is not None else None,
-            'frequency': frequency_match.group(1).lower() if frequency_match else None,
-            'at_target_percent': self.extract_number(dose_answer, self.patterns['at_target']),
-        }
+        dosing = DosingData(
+            dose=f"{dose_value:.1f} mg" if dose_value is not None else None,
+            frequency=frequency_match.group(1).lower() if frequency_match else None,
+            at_target_percent=self.extract_number(dose_answer, self.patterns['at_target'])
+        )
 
-        return dosing
+        return dosing.to_dict()
 
-    def extract_body_weight(self, qa_results: Dict) -> Dict[str, Any]:
+    def extract_body_weight(self, qa_results: Dict[str, Any]) -> Dict[str, Any]:
         """Extract body weight change information."""
         comparison_answer = self._find_answer(qa_results, 'comparison')
 
@@ -233,16 +327,15 @@ class TrialDataExtractor:
             re.IGNORECASE | re.DOTALL
         )
 
-        body_weight = {
-            'semaglutide_change': float(bw_match.group(1)) if bw_match else None,
-            'placebo_change': float(bw_match.group(2)) if bw_match else None,
-            'difference': None,
-        }
+        body_weight = BodyWeightData(
+            semaglutide_change=float(bw_match.group(1)) if bw_match else None,
+            placebo_change=float(bw_match.group(2)) if bw_match else None,
+        )
 
-        if body_weight['semaglutide_change'] is not None and body_weight['placebo_change'] is not None:
-            body_weight['difference'] = body_weight['semaglutide_change'] - body_weight['placebo_change']
+        if body_weight.semaglutide_change is not None and body_weight.placebo_change is not None:
+            body_weight.difference = body_weight.semaglutide_change - body_weight.placebo_change
 
-        return body_weight
+        return body_weight.to_dict()
 
     def extract_key_metrics(self, qa_results: Dict) -> Dict[str, Any]:
         """Extract all key metrics into structured format."""
@@ -268,13 +361,16 @@ class TrialDataExtractor:
         if publication and metadata.get('year'):
             publication = f"{publication} {metadata['year']}"
 
-        return {
-            'title': metadata.get('title') or qa_results.get('trial_title') or 'Clinical Trial Visual Abstract',
-            'drug': metadata.get('drug') or metadata.get('intervention') or 'Investigational Therapy',
-            'indication': metadata.get('indication') or metadata.get('condition') or 'Indication not specified',
-            'trial_name': metadata.get('trial_name') or metadata.get('study') or 'Clinical Study',
-            'publication': publication or 'Publication not specified',
-        }
+        default_info = TrialInfo()
+        trial_info = TrialInfo(
+            title=metadata.get('title') or qa_results.get('trial_title') or default_info.title,
+            drug=metadata.get('drug') or metadata.get('intervention') or default_info.drug,
+            indication=metadata.get('indication') or metadata.get('condition') or default_info.indication,
+            trial_name=metadata.get('trial_name') or metadata.get('study') or default_info.trial_name,
+            publication=publication or default_info.publication,
+        )
+
+        return trial_info.to_dict()
 
     @staticmethod
     def load_qa_results(filepath: str) -> Dict:
