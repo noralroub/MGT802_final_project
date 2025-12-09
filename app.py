@@ -133,25 +133,23 @@ with tab2:
             selected_question = st.selectbox("Select a predefined question:", sample_questions)
         with col2:
             st.write("")  # Spacing
-            if st.button("Ask Selected Question"):
-                custom_question = selected_question
-                should_ask = True
-            else:
-                should_ask = False
+            if st.button("Ask Selected Question", key="ask_selected"):
+                st.session_state.current_question = selected_question
+                st.session_state.ask_question = True
 
         st.subheader("Or Ask Your Own Question")
-        custom_question = st.text_input("Enter your question about the paper:")
+        custom_input = st.text_input("Enter your question about the paper:")
 
-        if custom_question and st.button("Ask Custom Question"):
-            should_ask = True
-        else:
-            should_ask = False
+        if custom_input and st.button("Ask Custom Question", key="ask_custom"):
+            st.session_state.current_question = custom_input
+            st.session_state.ask_question = True
 
-        if should_ask and custom_question:
+        if st.session_state.get("ask_question", False) and st.session_state.get("current_question"):
             with st.spinner("Generating answer..."):
                 try:
                     qa_system = st.session_state.qa_system
-                    result = qa_system.generate_answer(custom_question)
+                    current_question = st.session_state.current_question
+                    result = qa_system.generate_answer(current_question)
                     answer = result['answer']
 
                     st.success("Answer Generated:")
@@ -162,11 +160,15 @@ with tab2:
                     # Save to session state for visual abstract
                     if "qa_results" not in st.session_state:
                         st.session_state.qa_results = {}
-                    st.session_state.qa_results[custom_question] = answer
+                    st.session_state.qa_results[current_question] = answer
+
+                    # Reset the flag after answering
+                    st.session_state.ask_question = False
 
                 except Exception as e:
                     st.error(f"Error generating answer: {str(e)}")
                     logger.error(f"QA error: {str(e)}")
+                    st.session_state.ask_question = False
 
 with tab3:
     st.header("Generate Visual Abstract")
